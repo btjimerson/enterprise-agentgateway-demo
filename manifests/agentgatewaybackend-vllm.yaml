@@ -1,0 +1,52 @@
+# The two self-hosted vLLM backends for the p09-selfhosted pillar.
+#
+# THIS IS THE CONFIGURATION THAT MATTERS TO THE AUDIENCE. Pointing agentgateway
+# at a self-hosted vLLM server is `host` + `port` + `path` under an
+# openai-compatible provider — because vLLM serves the OpenAI API. Swapping these
+# mocks for real vLLM servers is a change to `host` and nothing else.
+#
+# For a vLLM server outside the cluster (the usual case, since vLLM wants GPUs),
+# Solo's documented pattern is a headless Service plus a hand-written
+# EndpointSlice carrying the server's IP, then the same host/port/path here. No
+# gateway-side change beyond the hostname.
+#
+# `openai.model` pins the model name agentgateway sends upstream, matching what
+# each server actually serves. Note the consequence, verified live: because the
+# pin REWRITES the request model before the call, the access log's
+# llm.requestModel and llm.responseModel end up identical even when a client asks
+# for the other fleet's model. Drop the pin if you want the client's original
+# request preserved in the audit record; keep it if you want the gateway to
+# normalize what reaches a single-model server. This demo keeps it, because a
+# real vLLM server serves exactly one model and rejects any other name.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: vllm-gemma-4
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: vllm-gemma-4
+            host: vllm-gemma.agentgateway-demo.svc.cluster.local
+            port: 80
+            path: /v1/chat/completions
+            openai:
+              model: gemma-4
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: vllm-llama-30
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: vllm-llama-30
+            host: vllm-llama.agentgateway-demo.svc.cluster.local
+            port: 80
+            path: /v1/chat/completions
+            openai:
+              model: llama-30

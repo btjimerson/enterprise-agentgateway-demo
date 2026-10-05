@@ -1,0 +1,29 @@
+# The A2A agent serves JSON-RPC at `/` (POST). Without a URLRewrite filter
+# the proxy would forward the client-facing `/a2a` path verbatim, and the
+# agent would return 404 "Not Found". The ReplacePrefixMatch filter below
+# strips `/a2a` and replaces it with `/` before sending upstream.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: a2a
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /a2a
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - kind: Service
+          name: a2a-agent
+          namespace: agentgateway-demo
+          port: 9090

@@ -1,0 +1,21 @@
+# Attaches the per-user TOKEN rate limit to the /token-rate HTTPRoute.
+#
+# Targets this demo's OWN route rather than /chat. p02-routing-03 attaches its
+# own entRateLimit policy to /chat, and two entRateLimit policies on one route
+# collide non-deterministically — which is why this demo used to open with a
+# pre-flight `kubectl delete` of the other demo's policy.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: token-rate-limit
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: token-rate
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+          - name: per-user-tokens-per-min

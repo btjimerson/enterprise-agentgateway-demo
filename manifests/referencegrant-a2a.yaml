@@ -1,0 +1,18 @@
+# Gateway API requires a ReferenceGrant in the *target* namespace for any
+# HTTPRoute that references a backend in a different namespace. The
+# /a2a HTTPRoute lives in agentgateway-system but points at the a2a-agent
+# Service in agentgateway-demo — this grant permits that cross-namespace ref.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-agentgateway-system-to-a2a-agent
+  namespace: agentgateway-demo
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: agentgateway-system
+  to:
+    - group: ""
+      kind: Service
+      name: a2a-agent

@@ -1,0 +1,24 @@
+# Raise the HTTP body buffer to 10 MB on the agentgateway-proxy gateway.
+#
+# Required for the Claude subscription OAuth token flow (AUTH_MODE=oauth): those
+# requests carry large payloads that exceed the default buffer. Only needed for
+# the OAuth/subscription path, not the API-key path.
+#
+# NOTE: this targets the Gateway, so the larger buffer applies to ALL routes on
+# agentgateway-proxy. A bigger buffer is harmless for the other demo routes.
+#
+# Applied by demo/p02-routing-11-claude-code-passthrough.sh when AUTH_MODE=oauth.
+# Docs: https://docs.solo.io/agentgateway/latest/integrations/llm-clients/claude-code/ (Teams account)
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: claude-buffer
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  frontend:
+    http:
+      maxBufferSize: 10485760

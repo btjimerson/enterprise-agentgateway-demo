@@ -1,0 +1,104 @@
+# Composable MCP (agentgateway 2026.6.3): define a custom MCP tool as a
+# multi-step pipeline of HTTP/MCP calls chained with CEL — no custom MCP server
+# to build. This example exposes ONE tool, github-summary, that fetches a GitHub
+# user's profile and their repos in two HTTP steps, then a CEL `output`
+# assembles a single response. See https://docs.solo.io/agentgateway/latest/mcp/composable/
+#
+# NOTE: the HTTP steps call the public GitHub API (egress + TLS origination
+# required). Unauthenticated GitHub is rate-limited (~60 req/hr); each tool call
+# makes 2 requests.
+---
+# Backend for the upstream HTTP API (GitHub), + a TLS policy so the gateway
+# originates HTTPS to api.github.com:443.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: github-api
+spec:
+  static:
+    host: api.github.com
+    port: 443
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: github-api-tls
+spec:
+  targetRefs:
+    - group: enterpriseagentgateway.solo.io
+      kind: EnterpriseAgentgatewayBackend
+      name: github-api
+  backend:
+    tls: {}
+---
+# The composable MCP backend: one custom tool assembled from two HTTP steps.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: composable-mcp
+spec:
+  entMcp:
+    targets:
+      - name: github-summary
+        custom:
+          description: "Fetch a GitHub user's public profile and list a few of their repositories."
+          inputSchema:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name:
+                type: string
+                description: "GitHub username"
+          steps:
+            - name: user
+              http:
+                backendRef:
+                  group: enterpriseagentgateway.solo.io
+                  kind: EnterpriseAgentgatewayBackend
+                  name: github-api
+                method: GET
+                path: '"/users/" + input.name'
+                headers:
+                  - name: User-Agent
+                    value: '"agentgateway-composable-mcp"'
+                  - name: Accept
+                    value: '"application/vnd.github+json"'
+            - name: repos
+              http:
+                backendRef:
+                  group: enterpriseagentgateway.solo.io
+                  kind: EnterpriseAgentgatewayBackend
+                  name: github-api
+                method: GET
+                path: '"/users/" + input.name + "/repos?per_page=5"'
+                headers:
+                  - name: User-Agent
+                    value: '"agentgateway-composable-mcp"'
+                  - name: Accept
+                    value: '"application/vnd.github+json"'
+          output: |
+            "Hello " + output.user.login
+            + "! You have " + string(output.user.public_repos) + " public repos."
+            + " A few of them: " + output.repos.map(r, r.name).join(", ") + "."
+---
+# Route /mcp/composable to the composable backend. No URLRewrite: the gateway
+# itself serves the MCP protocol for the composable tool (the steps call the
+# GitHub HTTP backend, not an upstream MCP server).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-composable
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp/composable
+      backendRefs:
+        - name: composable-mcp
+          group: enterpriseagentgateway.solo.io
+          kind: EnterpriseAgentgatewayBackend

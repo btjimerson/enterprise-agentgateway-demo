@@ -1,0 +1,46 @@
+# Code mode (agentgateway 2026.6.3): expose a single run_code tool. The model
+# submits JavaScript that calls the upstream MCP tools; the gateway runs it in
+# an embedded sandbox and only the final return value reaches the model. This
+# keeps context small even when a workflow spans many tool calls.
+# codeMode.timeout caps a single run_code execution (default 5s).
+# See https://docs.solo.io/agentgateway/latest/mcp/tool-mode/code-mode/
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: mcp-code-backend
+spec:
+  entMcp:
+    toolMode: Code
+    codeMode:
+      timeout: 7s
+    targets:
+      - name: fetcher
+        static:
+          host: mcp-website-fetcher.agentgateway-system.svc.cluster.local
+          port: 80
+          protocol: SSE
+---
+# Route /mcp/code to the Code-mode backend, rewriting the prefix to /mcp.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-code
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp/code
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /mcp
+      backendRefs:
+        - name: mcp-code-backend
+          group: enterpriseagentgateway.solo.io
+          kind: EnterpriseAgentgatewayBackend

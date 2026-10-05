@@ -1,0 +1,26 @@
+# Exposes the agentgateway-proxy data-plane pod's built-in readiness/liveness
+# HTTP server (port 15021, path /healthz/ready) externally so a cloud load
+# balancer in front of the cluster can health-check the proxy directly.
+#
+# Why a dedicated Service instead of an extra port on svc/agentgateway-proxy:
+# the enterprise-agentgateway controller renders that Service's ports from
+# Gateway.spec.listeners and reconciles away anything else. AgentgatewayParameters
+# can set Service annotations/labels/loadBalancerClass but cannot inject
+# ports. Port 15021 is not a Gateway listener — it's the agentgateway
+# binary's own probe endpoint — so a Gateway+HTTPRoute can't reach it either.
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway-proxy-healthz
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/component: agentgateway-proxy-healthz
+spec:
+  type: LoadBalancer
+  selector:
+    gateway.networking.k8s.io/gateway-name: agentgateway-proxy
+  ports:
+    - name: healthz
+      port: 15021
+      targetPort: 15021
+      protocol: TCP

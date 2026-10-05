@@ -1,0 +1,38 @@
+# Two routes to the same single-provider OpenAI backend for the spend-budget
+# demo (p02-routing-10):
+#   - /budget-demo    : the ENFORCED route (a budget-enforcement policy targets it)
+#   - /budget-control : the CONTROL route (no budget policy) — proves the budget's
+#                       blast radius is contained to the route it's attached to.
+# A single-provider AgentgatewayBackend is used deliberately: budget token-cost
+# accounting is verified against a simple LLM backend.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: budget-demo
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /budget-demo}
+      timeouts: {request: 120s}
+      backendRefs:
+        - {group: agentgateway.dev, kind: AgentgatewayBackend, name: openai-primary}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: budget-control
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /budget-control}
+      timeouts: {request: 120s}
+      backendRefs:
+        - {group: agentgateway.dev, kind: AgentgatewayBackend, name: openai-primary}

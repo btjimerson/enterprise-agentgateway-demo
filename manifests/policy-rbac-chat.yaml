@@ -1,0 +1,32 @@
+# CEL-based RBAC on the /chat HTTPRoute. Action: Deny.
+#
+# Denies every request whose JWT's preferred_username claim is "alice".
+# Every other authenticated user passes through. Demonstrates that the
+# same CEL engine powering MCP tool RBAC (policy-rbac-mcp.yaml) also
+# attaches to ordinary HTTPRoute traffic.
+#
+# CRD field is `traffic.authorization` — NOT `traffic.rbac`. The latter
+# name doesn't exist on the schema; the strict-decoding enforcer rejects
+# it with `unknown field "spec.traffic.rbac"`. Verified live with
+# kubectl get crd enterpriseagentgatewaypolicies.* -o yaml. Same path
+# the existing policy-rbac-mcp.yaml manifest uses.
+#
+# Requires policy-jwt.yaml to be applied first — authorization evaluates
+# JWT claims, so without an upstream JWT validator jwt.preferred_username
+# is unset and the Deny rule matches nothing useful.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-rbac
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  traffic:
+    authorization:
+      action: Deny
+      policy:
+        matchExpressions:
+          - 'jwt.preferred_username == "alice"'

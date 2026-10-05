@@ -1,0 +1,96 @@
+# Per-user TOKEN rate limit: 300 tokens per minute, keyed on x-user-id.
+#
+# WHY TOKENS AND NOT REQUESTS
+# Requests/min is abuse defense: it says nothing about cost, because one request
+# can be 50 tokens or 50,000. A token rate limit caps the actual spend rate, so a
+# runaway agent can't burn a month of budget in sixty seconds.
+#
+# HOW THIS DIFFERS FROM p02-routing-10 (EnterpriseAgentgatewayBudget)
+# The docs treat the two as complementary:
+#   - Budgets     : USD or tokens over LONG windows (Day..Year), keyed by
+#                   business dimensions (team, user, API key). Declarative CRD.
+#   - Global rate : requests or tokens over SHORT windows, via descriptors you
+#     limiting      write yourself. This file.
+# 08 answers "not more than 300 tokens in the next minute"; 10 answers "this
+# team gets $5/day".
+#
+# ─────────────────────────────────────────────────────────────────────────
+# USE setDescriptors, NOT descriptors — THIS IS THE WHOLE TRICK
+# ─────────────────────────────────────────────────────────────────────────
+# The published example for token rate limiting
+# (https://docs.solo.io/agentgateway/latest/llm/rate-limit/#token) uses the
+# SIMPLE descriptor form:
+#
+#   descriptors:
+#     - key: X-User-ID
+#       rateLimit: {unit: MINUTE, requestsPerUnit: 100}
+#   rateLimits:
+#     - actions: [{requestHeaders: {descriptorKey: X-User-ID, headerName: X-User-ID}}]
+#       type: TOKEN
+#
+# That shape does NOT enforce on this build. It is accepted — the RateLimitConfig
+# reports state=ACCEPTED and the policy reports Attached=True — and then every
+# request passes regardless of token spend. Verified by firing 4 requests worth
+# ~1700 tokens against a 1000-token/min limit and getting 4x 200. The identical
+# route and policy DO enforce with `type: REQUEST`, so it is the token counting
+# specifically that silently no-ops in the simple form.
+#
+# The working shape is setDescriptors + setActions with `limitType: TOKEN` inside
+# the rateLimit, below. That is also what the budget controller emits: applying an
+# EnterpriseAgentgatewayBudget and dumping the generated
+# `agw-budget-<name>-<hash>` RateLimitConfig shows exactly this structure, which
+# is how the shape was found.
+#
+# A `simpleDescriptors` entry with a key and NO value matches any value, which is
+# what makes the limit per-user rather than global.
+#
+# BOUNDARY BEHAVIOR
+# Tokens are debited after the response completes, so the request that crosses the
+# limit still returns 200 and the NEXT one is rejected — same as budgets.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# WHY THE LIMIT IS ONLY 300
+# ─────────────────────────────────────────────────────────────────────────
+# The window is a FIXED, wall-clock-aligned minute bucket, not a sliding window.
+# When the clock ticks over to the next minute the counter resets to zero.
+# Measured, at an earlier 1000-token limit:
+#
+#   02:48  req 1  402 tokens  running 402
+#   02:57  req 2  426 tokens  running 828   <- still under 1000
+#   03:09  req 3  460 tokens                <- bucket rolled, counter reset to 0
+#   03:20  req 4  365
+#   03:29  req 5  393                       <- 1218 inside minute 03
+#   03:29  req 6  429                       <- finally trips
+#
+# Each request is a real ~10s OpenAI call, so 1000 tokens needed THREE requests
+# (~30s) inside one bucket. A run that started late in a minute never accumulated
+# enough before the reset, and the demo failed intermittently depending on when
+# it was launched.
+#
+# 300 tokens is below what a SINGLE ~400-token request spends, so req 1 alone
+# exhausts the allowance and req 2 is rejected. Two requests, ~20s, one bucket.
+# The demo script also waits for a fresh minute boundary when there isn't enough
+# headroom left, which makes it deterministic rather than luck.
+#
+# Do not raise this back to a value that needs 3+ requests to trip.
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: per-user-tokens-per-min
+  namespace: agentgateway-system
+spec:
+  raw:
+    setDescriptors:
+      - alwaysApply: true
+        simpleDescriptors:
+          - key: user_id        # no value => match any user, so the limit is per-user
+        rateLimit:
+          limitType: TOKEN      # count tokens, not requests
+          requestsPerUnit: 300  # tokens/min (field name is a rate-limit-service artifact)
+          unit: MINUTE
+    rateLimits:
+      - setActions:
+          - requestHeaders:
+              descriptorKey: user_id
+              headerName: x-user-id
+        type: TOKEN

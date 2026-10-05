@@ -1,0 +1,50 @@
+# Demo-only HTTPRoute at /chat-content that demonstrates content-based
+# routing by request header. The header `x-model` switches the backend:
+#   x-model: mock     → mock-failover  AgentgatewayBackend
+#   (no header / any) → openai-primary AgentgatewayBackend (default)
+#
+# Two rules with different `matches.headers` — Gateway API resolves
+# most-specific-first, so the mock rule wins when x-model=mock is
+# present; the bare path-only rule acts as the default.
+#
+# Backend names must match the live AgentgatewayBackend resources from
+# the install scripts: 'openai-primary' and 'mock-failover' (NOT
+# 'openai'/'mock'). The route's status condition `BackendNotFound`
+# is the canary if anyone tries to reuse those shorter names.
+#
+# No URLRewrite needed: AgentgatewayBackend is AI-aware — it constructs
+# the upstream LLM call from the request body's `model` field + the
+# backend's own provider config. The inbound path prefix is
+# informational. Same pattern as the baseline `chat` HTTPRoute and the
+# fixed routing-05 manifest.
+#
+# Used by demo/routing-06-content-based-routing.sh.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: chat-content
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /chat-content
+          headers:
+            - name: x-model
+              value: mock
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: mock-failover
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /chat-content
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: openai-primary

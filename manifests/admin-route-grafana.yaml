@@ -1,0 +1,17 @@
+# HTTPRoute for admin-proxy:3000 → grafana.monitoring.svc:80.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: admin-route-grafana
+  namespace: monitoring
+spec:
+  parentRefs:
+    - name: admin-proxy
+      namespace: agentgateway-system
+      sectionName: grafana
+      port: 3000
+  rules:
+    - backendRefs:
+        - kind: Service
+          name: grafana
+          port: 80

@@ -1,0 +1,27 @@
+# Strip tool-calling from every request on the /chat route.
+#
+# Uses `traffic.transformation.request.body` which rewrites the entire
+# request body via a CEL expression BEFORE it's forwarded to the provider.
+# (The narrower `backend.ai.transformations` only supports known scalar
+# fields such as `max_tokens`; it doesn't rewrite arrays/objects like
+# `tools` or `tool_choice`.)
+#
+# The CEL expression:
+#   1. Parses request.body into a map via json()
+#   2. filterKeys strips "tools" and "tool_choice"
+#   3. toJson serializes the map back to a string
+# With neither field present, OpenAI cannot (and will not) call a tool.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-disable-tools
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  traffic:
+    transformation:
+      request:
+        body: 'toJson(json(request.body).filterKeys(k, k != "tools" && k != "tool_choice"))'

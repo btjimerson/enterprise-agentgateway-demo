@@ -1,0 +1,23 @@
+# The enforcement half of the budget feature. A budget resource only DEFINES
+# limits; this EnterpriseAgentgatewayPolicy's entBudgetEnforcement is what turns
+# metering + blocking ON, and only for the route it targets (the /budget-demo
+# HTTPRoute). The /budget-control route is intentionally NOT targeted, so its
+# traffic is unaffected — the budget's blast radius is scoped to this policy.
+#
+# discovery.namespaces.from: Same — consider budgets in the same namespace as
+# this policy.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: budget-demo-enforcement
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: budget-demo
+  traffic:
+    entBudgetEnforcement:
+      discovery:
+        namespaces:
+          from: Same

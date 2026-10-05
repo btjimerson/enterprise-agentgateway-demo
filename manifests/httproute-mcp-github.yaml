@@ -1,0 +1,37 @@
+# Route /mcp-github → github-mcp-backend. Hostname-agnostic so the demo
+# script can hit the agentgateway-proxy LB on whatever address it picks
+# up at install time.
+#
+# CORS allowOrigins includes http://localhost:8080 because the Solo
+# Enterprise UI runs there during port-forward. The UI's elicitation
+# page renders the OAuth-consent link served by the agentgateway STS;
+# without CORS the browser blocks the cross-origin call.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-github
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp-github
+      filters:
+        - type: CORS
+          cors:
+            allowHeaders:
+              - "*"
+            allowMethods:
+              - "*"
+            allowOrigins:
+              - "http://localhost:8080"
+              - "http://localhost:4000"
+              - "http://localhost:8090"
+      backendRefs:
+        - name: github-mcp-backend
+          group: agentgateway.dev
+          kind: AgentgatewayBackend

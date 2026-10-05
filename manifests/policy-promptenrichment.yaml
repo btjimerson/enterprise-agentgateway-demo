@@ -1,0 +1,32 @@
+# Prompt enrichment — prepend a system message to every /chat request.
+#
+# CRD path is `spec.backend.ai.prompt.{prepend,append}` (a list of
+# {role, content} entries inserted into the request `messages` array
+# before/after the app's user messages). NOT `promptEnrichment` —
+# that's the docs/marketing name for the feature, but the schema
+# field is just `prompt`. Verified live with
+# `kubectl get crd enterpriseagentgatewaypolicies.enterpriseagentgateway.solo.io -o yaml`.
+#
+# Sibling fields under `backend.ai`:
+#   - defaults     [{field, value}]  set req fields if absent
+#   - overrides    [{field, value}]  force-overwrite req fields
+#   - modelAliases {alias → real}    rename incoming model values
+#   - prompt       {prepend, append} what this policy uses
+#
+# Used by demo/routing-07-prompt-enrichment.sh.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-prompt-enrichment
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  backend:
+    ai:
+      prompt:
+        prepend:
+          - role: system
+            content: "You are a pirate. Always respond in pirate speak, with 'arrr' and nautical metaphors."

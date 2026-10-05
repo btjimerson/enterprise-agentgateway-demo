@@ -1,0 +1,29 @@
+# GitHub's hosted MCP server. agentgateway proxies MCP requests from
+# clients to this upstream over HTTPS with SNI = api.githubcopilot.com.
+#
+# Used by demo/security-05-elicitation-github.sh to demonstrate URL-mode
+# OAuth elicitation: the first time a user calls a GitHub tool through
+# this backend, agentgateway returns 500 with an elicitation URL pointing
+# at the Solo UI. The user opens the URL, authorizes GitHub in their
+# browser, and the resulting access token is stored in the STS server
+# keyed by (userId, this backend). Subsequent calls pick up the cached
+# token automatically.
+#
+# Static target (host:port + path) is the right shape for hosted SaaS MCP
+# servers — there's no in-cluster Service to discover via selector.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: github-mcp-backend
+  namespace: agentgateway-system
+spec:
+  mcp:
+    targets:
+      - name: mcp-target
+        static:
+          host: api.githubcopilot.com
+          port: 443
+          path: /mcp/
+          policies:
+            tls:
+              sni: api.githubcopilot.com

@@ -1,0 +1,42 @@
+# Previously ran peterj/mcp-website-fetcher, but that image doesn't expose
+# MCP over streamable-HTTP at a discoverable path, so the federated backend's
+# handshake always failed against it. We now run a SECOND instance of
+# @modelcontextprotocol/server-everything under a different label
+# (mcp-tools-extra) so the mcp-federated backend has two real targets and
+# the "MCP multiplexing" demo actually works end-to-end.
+#
+# If you later want a truly different tool set, replace this Deployment with
+# any streamable-HTTP MCP server that listens at /mcp.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-tools-extra
+  namespace: agentgateway-demo
+  labels: {app: mcp-tools-extra}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mcp-tools-extra}}
+  template:
+    metadata:
+      labels: {app: mcp-tools-extra}
+    spec:
+      containers:
+        - name: mcp-server
+          image: node:20-alpine
+          command: ["npx"]
+          args: ["-y", "@modelcontextprotocol/server-everything", "streamableHttp"]
+          ports: [{containerPort: 3001}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-tools-extra
+  namespace: agentgateway-demo
+  labels: {app: mcp-tools-extra}
+spec:
+  selector: {app: mcp-tools-extra}
+  ports:
+    - port: 3001
+      targetPort: 3001
+      appProtocol: agentgateway.dev/mcp

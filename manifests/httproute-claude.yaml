@@ -1,0 +1,37 @@
+# Route Claude Code (or any Anthropic Messages API client) through agentgateway.
+#
+# The /claude prefix is rewritten to / so the backend sees the native Anthropic
+# paths (/v1/messages, /v1/messages/count_tokens, /v1/models). Using a /claude
+# prefix instead of the docs' catch-all "/" keeps this route from shadowing the
+# other routes already on the shared agentgateway-proxy (/chat, /mcp, /a2a).
+#
+# Point Claude Code at it:
+#   ANTHROPIC_BASE_URL="http://<gateway-address>:8080/claude"   (LoadBalancer)
+#   ANTHROPIC_BASE_URL="http://localhost:8080/claude"           (port-forward)
+#
+# Used by demo/p02-routing-11-claude-code-passthrough.sh.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: claude
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /claude
+      backendRefs:
+        - name: anthropic-passthrough
+          namespace: agentgateway-system
+          group: enterpriseagentgateway.solo.io
+          kind: EnterpriseAgentgatewayBackend
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /

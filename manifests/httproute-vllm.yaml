@@ -1,0 +1,42 @@
+# Single entry point for both self-hosted vLLM backends.
+#
+#   POST /vllm                      -> gemma-4  (the default fleet)
+#   POST /vllm  x-model: llama-30   -> llama-30 (the larger/restricted fleet)
+#
+# Two rules on one path, differing only by `matches.headers`. Gateway API
+# resolves the more specific match first, so the header rule wins when present
+# and the bare path rule is the default. Same shape as the proven
+# httproute-chat-content-based.yaml.
+#
+# The client's URL never changes between the two calls — only a header does.
+# That is the point worth making out loud: consumers keep one endpoint while the
+# platform team retargets fleets underneath them.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vllm
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /vllm
+          headers:
+            - name: x-model
+              value: llama-30
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: vllm-llama-30
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /vllm
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: vllm-gemma-4

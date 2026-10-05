@@ -1,0 +1,164 @@
+{
+  "realm": "solo",
+  "enabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 14400,
+  "ssoSessionIdleTimeout": 14400,
+  "ssoSessionMaxLifespan": 14400,
+  "groups": [
+    {
+      "name": "admins"
+    },
+    {
+      "name": "writers"
+    },
+    {
+      "name": "admin"
+    },
+    {
+      "name": "users"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "solo-ui-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost:4000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "Groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "solo-ui-backend",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": true,
+      "redirectUris": [
+        "http://localhost:4000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4000"
+      ],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "Groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "${SOLO_UI_BACKEND_SECRET}"
+    },
+    {
+      "clientId": "agw-client",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost/*",
+        "http://localhost:*/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "protocolMappers": [
+        {
+          "name": "may_act",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "may_act",
+            "claim.value": "{\"sub\":\"system:serviceaccount:agentgateway-demo:agent-sa\"}",
+            "jsonType.label": "JSON",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Example",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "${DEMO_USER_ALICE_PASSWORD}"
+        }
+      ],
+      "attributes": {
+        "mcp_scope": [
+          "restricted"
+        ]
+      },
+      "groups": [
+        "admins",
+        "admin",
+        "users"
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Example",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "${DEMO_USER_BOB_PASSWORD}"
+        }
+      ],
+      "attributes": {
+        "mcp_scope": [
+          "all"
+        ]
+      },
+      "groups": [
+        "writers",
+        "users"
+      ]
+    }
+  ]
+}

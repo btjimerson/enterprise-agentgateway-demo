@@ -1,0 +1,31 @@
+# Health-based eviction for the failover demo (requires the `unhealthyCondition`
+# + `eviction` fields, absent from the v2.2.x CRDs).
+#
+# `failover-health` targets the multi-provider AgentgatewayBackend: when a
+# response matches the CEL condition, the provider is evicted from its priority
+# group for `duration`. Once every provider in a group is evicted, the proxy
+# routes to the next priority group automatically.
+#
+# No retry policy is applied here on purpose. Retrying the eviction-tripping 5xx
+# inside the gateway hides it from the client — the retry lands on group 1 and
+# the caller sees HTTP 200, so all three requests look identical and the eviction
+# state machine this demo teaches becomes invisible. In production you would add
+# retry on top; that is what turns "the first caller eats the error" into fully
+# seamless failover.
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: failover-health
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: multi-provider
+  backend:
+    health:
+      unhealthyCondition: "response.code >= 500 || response.code == 429 || response.code == 401"
+      eviction:
+        duration: 30s
+        consecutiveFailures: 1

@@ -1,0 +1,35 @@
+# Anthropic backend — API-KEY auth, NO pinned model (model passthrough).
+#
+# Use this when you authenticate with an Anthropic API key. The real key is
+# injected from the anthropic-secret Secret as the x-api-key header
+# (auth.secretRef), so clients never send it.
+#
+# For a Claude subscription via SSO/OAuth (e.g. JumpCloud) use
+# backend-anthropic-oauth.yaml instead — there the client's OAuth token is
+# passed through and NO key/secret is used.
+#
+# Either backend uses metadata.name `anthropic-passthrough`, so httproute-claude
+# .yaml points at the same name regardless of which one is applied. Empty
+# `anthropic: {}` = the client's model is forwarded as-is (a pinned
+# anthropic.model would override and reject mismatches).
+#
+# AUTH_MODE=apikey in demo/p02-routing-11-claude-code-passthrough.sh applies this.
+# Docs: https://docs.solo.io/agentgateway/latest/integrations/llm-clients/claude-code/
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: anthropic-passthrough
+  namespace: agentgateway-system
+spec:
+  ai:
+    provider:
+      anthropic: {}          # no model pinned → client's model is passed through
+  policies:
+    ai:
+      routes:
+        '/v1/messages': Messages
+        '/v1/messages/count_tokens': AnthropicTokenCount
+        '*': Passthrough
+    auth:
+      secretRef:
+        name: anthropic-secret

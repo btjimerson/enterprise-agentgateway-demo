@@ -1,0 +1,62 @@
+# Virtual keys for the self-hosted vLLM demo.
+#
+# THE POINT: a key is not a string in a config file, it is an identity. Each
+# entry carries `metadata` that the gateway attaches to the request once the key
+# verifies, and every downstream policy — rate limits, metrics, and the access
+# log that forms the audit trail — reads that metadata instead of the key itself.
+# Revoking someone is deleting their entry here, not rotating a shared secret.
+#
+# Why a ConfigMap and not a Secret: only a SHA-256 HASH of each key is stored, so
+# there is no plaintext credential in the cluster to leak. Clients still send the
+# raw key; the gateway hashes what it receives and compares. This is Solo's
+# recommended shape. (`agctl migrate virtualkeys-to-configmap` converts an
+# existing Secret-based setup.)
+#
+# The label is REQUIRED — apiKeyAuthentication selects ConfigMaps by label, not
+# by name, so a missing label means the policy silently finds no keys and every
+# request fails to authenticate.
+#
+# The identities are deliberately generic: example.com is reserved by RFC 2606,
+# so it can never collide with a real domain. Swap in whatever names suit the
+# audience — the values are read straight through to the audit log.
+#
+# THE NAMES ARE DELIBERATELY NOT KEYCLOAK USERNAMES. An earlier version used
+# `alice`, which collides with the Keycloak user `alice` in the p05 demos and made
+# this ConfigMap look like a second user directory kept in sync with the IdP by
+# hand — a fair criticism of a design nobody should ship. It is not one: a virtual
+# key is a credential for a caller that CANNOT complete an interactive OIDC flow
+# (a CLI, a notebook, a cron job, a legacy service). Humans and anything that can
+# hold a token authenticate as themselves against the IdP — that is the JWT path
+# in the p05 demos. `dana` is not a Keycloak user precisely so the two identity
+# systems cannot be confused on screen. Nothing links a key's metadata to an IdP
+# record; `user_id` is a string this file asserts and the audit log echoes.
+#
+# Hashes must be computed over the exact key bytes with NO trailing newline;
+# `echo` would append one and every comparison would fail. Use printf:
+#   printf '%s' 'sk-demo-dana-7f3a91c2' | sha256sum | awk '{print "sha256:"$1}'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-api-keys
+  namespace: agentgateway-system
+  labels:
+    agentgateway.dev/apikey: "true"
+data:
+  dana-cli: |
+    {
+      "keyHash": "sha256:5abb68866970b831b1a0cb8fd7c24927499cf2bf64a9f495364acbc95a24cb75",
+      "metadata": {
+        "user_id": "dana@example.com",
+        "team": "platform-engineering",
+        "key_type": "interactive"
+      }
+    }
+  svc-nightly-batch: |
+    {
+      "keyHash": "sha256:2fe8a59268c26d86382c5a3a583823313a213db936d9fb89323b75d9f987fd77",
+      "metadata": {
+        "user_id": "svc-nightly-batch@example.com",
+        "team": "batch-automation",
+        "key_type": "service"
+      }
+    }

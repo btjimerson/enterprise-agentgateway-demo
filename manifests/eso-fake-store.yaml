@@ -1,0 +1,20 @@
+# A ClusterSecretStore using the External Secrets Operator "Fake" provider.
+#
+# The fake provider reads secret values from its own spec (not a real backend).
+# This keeps the demo portable — users can see the ESO flow without needing
+# Vault, AWS Secrets Manager, or GCP Secret Manager configured. To swap to a
+# real backend, replace this CR with (for example) a SecretStore of type
+# `vault:` and update the ExternalSecret to reference it.
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: fake-store
+spec:
+  provider:
+    fake:
+      data:
+        # The ESO fake provider matches BOTH `key` AND `version` exactly. Our
+        # ExternalSecret's remoteRef doesn't set a version, so we leave
+        # `version` unset here too — they must match to resolve.
+        - key: openai/api-key
+          value: "OPENAI_API_KEY_PLACEHOLDER"   # Overwritten at install time by 05-install-eso.sh

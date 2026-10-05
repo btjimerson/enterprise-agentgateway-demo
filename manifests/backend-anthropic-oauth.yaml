@@ -1,0 +1,38 @@
+# Anthropic backend — SUBSCRIPTION / OAuth auth, NO pinned model (passthrough).
+#
+# Use this when Claude Code signs in through your Claude subscription via SSO
+# (e.g. JumpCloud) instead of an API key. There is NO `auth` block: the gateway
+# does not own or inject a credential — it PASSES THROUGH the OAuth bearer token
+# that Claude Code obtained at login (Claude Code also auto-sends the
+# `anthropic-beta: oauth-2025-04-20` header). JumpCloud federation happens during
+# `claude` login in the browser; the gateway only forwards the resulting token to
+# api.anthropic.com.
+#
+# Because there's no gateway-owned credential, gateway-managed key features
+# (virtual keys, central key rotation) don't apply — but model routing and
+# cost/trace telemetry still work. Pair with policy-claude-buffer.yaml (the OAuth
+# token flow needs a larger body buffer).
+#
+# Same metadata.name (`anthropic-passthrough`) as the API-key backend, so
+# httproute-claude.yaml works with either. Empty `anthropic: {}` = the client's
+# model is passed through (no override).
+#
+# AUTH_MODE=oauth (default) in demo/p02-routing-11-claude-code-passthrough.sh
+# applies this. Do NOT set ANTHROPIC_API_KEY — you're on subscription auth.
+# Docs: https://docs.solo.io/agentgateway/latest/integrations/llm-clients/claude-code/ (Teams account)
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: anthropic-passthrough
+  namespace: agentgateway-system
+spec:
+  ai:
+    provider:
+      anthropic: {}          # no model pinned → client's model is passed through
+  policies:
+    ai:
+      routes:
+        '/v1/messages': Messages
+        '/v1/messages/count_tokens': AnthropicTokenCount
+        '*': Passthrough
+    # No auth block — the client's OAuth token is passed straight through.

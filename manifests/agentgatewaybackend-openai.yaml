@@ -1,0 +1,18 @@
+# Primary LLM provider: OpenAI GPT-4o, credentials pulled from the K8s Secret
+# ESO materialized (openai-secret).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai-primary
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: openai-primary
+            openai:
+              model: gpt-4o
+            policies:
+              auth:
+                secretRef:
+                  name: openai-secret

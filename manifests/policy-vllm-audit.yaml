@@ -1,0 +1,63 @@
+# The audit trail: a structured access-log record for every request to /vllm.
+#
+# "Access logs, sometimes referred to as audit logs" is Solo's own framing, and
+# this is the feature a compliance reviewer would actually be shown. Content is
+# built from CEL expressions, so the record contains the fields the auditor cares
+# about rather than a fixed HTTP log line.
+#
+# What each attribute answers:
+#   audit.user        WHO — resolved from the virtual key's metadata, not the key
+#                     itself. The raw key never appears in the log.
+#   audit.team        which group they belong to, straight from the key metadata
+#   audit.keyType     interactive human vs service account
+#   audit.model*      what they asked for and what served it. These are equal in
+#                     this demo because the backends pin `openai.model`, which
+#                     rewrites the request model upstream — do not claim on a
+#                     call that they diverge. Drop the pin to preserve the
+#                     client's original model in the record.
+#   audit.tokens      volume, for showing usage without touching cost framing
+#   audit.route       which gateway route handled it
+#   audit.status      the outcome, including guardrail rejections
+#
+# TWO SCHEMA CONSTRAINTS, both verified against the live CRD:
+#
+#   1. `frontend` policies may ONLY target a Gateway — not an HTTPRoute. So this
+#      attaches to the gateway and uses `filter` to scope itself to the vllm
+#      route. Without the filter it would log every route on the proxy.
+#   2. Attribute expressions must tolerate a missing source. `apiKey` is only
+#      populated when an API-key policy is in effect, so a bare `apiKey.user_id`
+#      fails to evaluate on any request that did not carry a key. Each expression
+#      is guarded with has() and falls back to a literal, which keeps a rejected
+#      request in the log — the audit trail must record denials, not just
+#      successes.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: vllm-audit-log
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  frontend:
+    accessLog:
+      filter: proxy.route.name == "vllm"
+      attributes:
+        add:
+          - name: audit.user
+            expression: 'has(apiKey.user_id) ? apiKey.user_id : "unauthenticated"'
+          - name: audit.team
+            expression: 'has(apiKey.team) ? apiKey.team : "-"'
+          - name: audit.keyType
+            expression: 'has(apiKey.key_type) ? apiKey.key_type : "-"'
+          - name: audit.modelRequested
+            expression: 'has(llm.requestModel) ? llm.requestModel : "-"'
+          - name: audit.modelServed
+            expression: 'has(llm.responseModel) ? llm.responseModel : "-"'
+          - name: audit.tokens
+            expression: 'has(llm.totalTokens) ? string(llm.totalTokens) : "0"'
+          - name: audit.route
+            expression: 'has(proxy.route.name) ? proxy.route.name : "-"'
+          - name: audit.status
+            expression: string(response.code)

@@ -1,0 +1,43 @@
+# Search mode (agentgateway 2026.6.3): replace the full MCP tool list with
+# two meta tools, get_tool and invoke_tool. The client never sees the upstream
+# tool catalog, which keeps the model's context small even when the backend
+# fronts many tools. See https://docs.solo.io/agentgateway/latest/mcp/tool-mode/search-mode/
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: mcp-search-backend
+spec:
+  entMcp:
+    toolMode: Search
+    targets:
+      - name: fetcher
+        static:
+          host: mcp-website-fetcher.agentgateway-system.svc.cluster.local
+          port: 80
+          protocol: SSE
+---
+# Route /mcp/search to the Search-mode backend. The prefix is rewritten to /mcp
+# so the upstream MCP server sees its expected path.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-search
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp/search
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /mcp
+      backendRefs:
+        - name: mcp-search-backend
+          group: enterpriseagentgateway.solo.io
+          kind: EnterpriseAgentgatewayBackend

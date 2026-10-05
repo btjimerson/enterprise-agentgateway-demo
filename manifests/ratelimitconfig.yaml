@@ -1,0 +1,19 @@
+# Rate-limit definition: 5 requests per minute per user (JWT sub).
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: per-user-5-per-min
+  namespace: agentgateway-system
+spec:
+  raw:
+    descriptors:
+      - key: user_id
+        rateLimit:
+          unit: MINUTE
+          requestsPerUnit: 5
+    rateLimits:
+      - actions:
+          - requestHeaders:
+              descriptorKey: user_id
+              headerName: x-user-id
+        type: REQUEST

@@ -1,0 +1,55 @@
+# Per-BACKEND policy, not per-route policy.
+#
+# This is the distinction worth drawing for a team running a gateway that only
+# has global or per-route config: `targetRefs` here points at an
+# AgentgatewayBackend, so the policy travels with the model fleet. Route both
+# fleets through one endpoint and each still carries its own rules. Add a third
+# fleet and it arrives with its own policy attached rather than needing the
+# shared route config edited.
+#
+# The CRD permits backend.* policies to target Gateway, HTTPRoute, GRPCRoute,
+# ListenerSet, Service, ServiceEntry, EnterpriseAgentgatewayBackend or
+# AgentgatewayBackend. Note `traffic.*` policies canNOT target a backend, and
+# `frontend.*` can only target a Gateway — so rate limits and access logs attach
+# at the route or gateway level, and only backend.* config is fleet-scoped.
+#
+# Each fleet gets a different injected system prompt. The mock servers echo the
+# system prompt they receive, which makes the per-backend policy visible in the
+# response body instead of something you have to take on trust.
+#
+# Schema note: the field is `backend.ai.prompt.{prepend,append}`, NOT
+# `promptEnrichment` — that is the docs name for the feature, not the API field.
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: vllm-gemma-4-fleet-policy
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: vllm-gemma-4
+  backend:
+    ai:
+      prompt:
+        prepend:
+          - role: system
+            content: "General-purpose fleet. Unclassified data only."
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: vllm-llama-30-fleet-policy
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: vllm-llama-30
+  backend:
+    ai:
+      prompt:
+        prepend:
+          - role: system
+            content: "Restricted fleet. Controlled unclassified information; cite sources and refuse export-controlled topics."

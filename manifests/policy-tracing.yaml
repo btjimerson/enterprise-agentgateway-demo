@@ -1,0 +1,21 @@
+# Wires the data-plane proxy into the solo-enterprise-telemetry-collector
+# installed by the `management` (UI) chart, so traces show up in the UI's
+# Tracing view.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: tracing
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  frontend:
+    tracing:
+      backendRef:
+        name: solo-enterprise-telemetry-collector
+        namespace: agentgateway-system
+        kind: Service
+        port: 4317
+      randomSampling: "true"

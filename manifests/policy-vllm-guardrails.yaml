@@ -1,0 +1,63 @@
+# Guardrails on the /vllm route: inspect prompts before they reach a
+# self-hosted model, and inspect completions before they reach the caller.
+#
+# Two directions, two different actions — the distinction is the point:
+#
+#   request  -> Reject : the prompt never reaches the model at all. Use when the
+#                        content should not exist in the inference path, e.g. an
+#                        SSN or a live credential pasted into a chat box.
+#   response -> Mask   : the completion is rewritten before the caller sees it.
+#                        Use when the model may legitimately process something
+#                        but it must not leave the boundary.
+#
+# `builtins` are maintained detectors (Ssn, CreditCard, Email, PhoneNumber) so
+# common PII does not depend on hand-rolled regex. `matches` adds
+# deployment-specific patterns alongside them.
+#
+# SCHEMA NOTE, verified against the live CRD: `response` is a SIBLING of `regex`
+# inside each request list item, not a field inside `regex`. Nesting it under
+# `regex` is silently accepted as unknown config in some versions and yields a
+# generic rejection message instead of this one. Items under promptGuard.request
+# are: bedrockGuardrails, googleModelArmor, openAIModeration, regex, response,
+# webhook. `regex` itself has only: action, builtins, matches.
+#
+# Guards run in sequence and each can Pass, Reject, or Mask, so a regex stage can
+# be layered ahead of an external moderation or webhook stage. This policy uses
+# only the regex stage — no external dependency, nothing to fail at demo time.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: vllm-guardrails
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vllm
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - regex:
+              action: Reject
+              builtins:
+                - Ssn
+                - CreditCard
+              matches:
+                # Live credentials pasted into a prompt.
+                - "\\bAKIA[0-9A-Z]{16}\\b"
+                - "-----BEGIN\\s+(RSA\\s+|EC\\s+|OPENSSH\\s+)?PRIVATE KEY-----"
+                - "(?i)(password|api[_-]?key|secret|token)\\s*[=:]\\s*[\"']?[^\\s\"']{8,}"
+                # Classification markings have no business in a prompt bound for
+                # a general-purpose fleet. Illustrative, not a compliance control.
+                - "(?i)\\b(TOP SECRET|SECRET//|CONFIDENTIAL//|NOFORN|CUI//)"
+            response:
+              message: "Request blocked by gateway guardrail: the prompt contains PII, a live credential, or a classification marking. It was not sent to the model."
+              statusCode: 422
+        response:
+          - regex:
+              action: Mask
+              builtins:
+                - Ssn
+                - CreditCard
+                - Email

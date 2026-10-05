@@ -1,0 +1,73 @@
+# OWASP Core Rule Set v4 + one custom directive, for the agentgateway `/chat`
+# route. CRS is bundled with the WAF server — no external download.
+#
+# ── The two-resource model ────────────────────────────────────────────────
+# A WAFPolicy has NO targetRefs. Applied on its own it is DORMANT: the CRD's
+# spec is only coreRuleSet / customDirectives / customInterventionResponse /
+# processingConfig / ruleEngineSettings (only ruleEngineSettings is required).
+# Attaching it takes a second resource — see
+# agentgatewaypolicy-waf-binding.yaml. The Solo docs' CRS example shows a bare
+# WAFPolicy in a namespace, which reads as though it self-attaches. It does not.
+#
+# ── processingConfig is the setting that matters here ─────────
+# request.mode defaults to `Headers`, meaning the WAF never sees the request
+# BODY. On an API gateway that mostly costs you nothing — attacks arrive in the
+# URI. On an AGENT gateway the payload is the prompt, inside a JSON body, so the
+# default silently lets every body-borne attack through. Verified on a live
+# cluster: with mode Headers, `1 UNION SELECT * FROM users--` in a prompt
+# returns 200 and reaches the model; with HeadersAndBody it returns 403.
+# That is the whole point of this case — do not drop this field.
+#
+# `SecRequestBodyAccess On` is NOT needed in ruleEngineSettings; processingConfig
+# alone is sufficient (tested both ways).
+#
+# ── Newline-in-body gotcha ───────────────────────────────────
+# Attaching ANY WAFPolicy makes the gateway reject a request whose body
+# contains a newline with 403 — including a single trailing one. Verified as
+# independent of everything in this file: it happens with processingConfig
+# mode Headers, with HeadersAndBody, and with no coreRuleSet at all, while the
+# same request returns 200 with no WAFPolicy attached. So it is the WAF
+# integration, not a CRS signature, and no SecRuleRemoveById will fix it.
+# Real OpenAI SDK clients send compact JSON so this does not bite in practice,
+# but a hand-written pretty-printed curl looks exactly like a false positive.
+#
+# ── Rule exclusions: deliberately NONE ────────────────────────────────────
+# enterprise-kgateway's equivalent policy documents three exclusions as
+# mandatory (913100 scanner detection, 920430 protocol enforcement, 920350
+# numeric Host). None are needed here, and all three were tested as absent:
+#   - 920430 is required for kgateway because Envoy's ExtProc does not forward
+#     the original HTTP version. agentgateway is not Envoy, and a benign request
+#     returns 200 with no exclusions at all.
+#   - 920350 fires when Host is a numeric IP. These demos reach the gateway over
+#     a localhost port-forward, so Host is `localhost:8080`, not an IP.
+#   - 913100 blocks scanner UAs (sqlmap, nikto). `curl/8.x` is not one.
+# If you re-point this demo at the LoadBalancer IP instead of the port-forward,
+# 920350 WILL start blocking benign requests — add the exclusion then, not now.
+apiVersion: waf.solo.io/v1alpha1
+kind: WAFPolicy
+metadata:
+  name: chat-waf
+  namespace: agentgateway-system
+spec:
+  # Inspect the request body, not just headers. See the note above.
+  processingConfig:
+    request:
+      mode: HeadersAndBody
+  coreRuleSet:
+    settings:
+      # The SecAction id:900990 line is mandatory: it sets tx.crs_setup_version,
+      # and without it CRS rule 901001 blocks every single request.
+      inline: |
+        SecDefaultAction "phase:1,log,auditlog,deny,status:403"
+        SecDefaultAction "phase:2,log,auditlog,deny,status:403"
+        SecAction "id:900990,phase:1,pass,t:none,nolog,tag:'OWASP_CRS',ver:'OWASP_CRS/4.23.0',setvar:tx.crs_setup_version=4230"
+  ruleEngineSettings:
+    inline: |
+      SecRuleEngine On
+  # Bundled CRS covers the broad case; customDirectives is the extension point
+  # for rules of your own. IDs 1000-1999 are conventionally reserved for local
+  # rules so they cannot collide with a future CRS rule ID.
+  customDirectives:
+    - inline: |
+        SecRule REQUEST_HEADERS:User-Agent "@contains scammer" \
+          "id:1001,phase:1,deny,status:403,msg:'Blocked by local UA rule'"

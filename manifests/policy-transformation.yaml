@@ -1,0 +1,43 @@
+# Response-header modification on /chat.
+#
+#   - Strip any `x-request-id` the upstream provider returns. Avoids
+#     leaking internal provider identifiers back to the client.
+#   - Add x-served-by so the client can see which gateway handled
+#     the request. (The demo script greps response headers for this,
+#     so it has to be on the response side, not request.add.)
+#
+# This policy used to also force `temperature: 0` via `backend.ai.overrides`,
+# sold as "deterministic output for auditability". That was removed: temperature
+# 0 only selects greedy decoding, and the same request still returns different
+# completions run to run (MoE routing, batched inference, float
+# non-associativity). The demo asserted determinism it could not show and that
+# does not hold — four identical calls returned 37, 42, 42, 37.
+#
+# `backend.ai.overrides` itself works fine (verified by tailing
+# agentgateway-proxy logs: gen_ai.request.temperature flipped 0.9 -> 0); the
+# problem was the claim made about its effect, not the mechanism. For body
+# rewriting see policy-tool-disable.yaml, which does a narrower CEL-based
+# rewrite on the same path.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-transformations
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  # `traffic.headerModifiers` is the Gateway-API-style header filter and
+  # runs on the LLM-protocol path; `traffic.transformation` is for the
+  # plain-HTTP path and didn't actually apply to /chat in our chart
+  # version (policy attaches successfully but headers don't materialize
+  # in the response).
+  traffic:
+    headerModifiers:
+      response:
+        add:
+          - name: x-served-by
+            value: enterprise-agentgateway
+        remove:
+          - x-request-id

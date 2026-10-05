@@ -1,0 +1,45 @@
+# A minimal single-tool MCP server used by the MCP tool-mode demos
+# (search mode, code mode). It exposes exactly one tool, `fetch`, which
+# retrieves a URL and returns its content. Deployed by the tool-mode demo
+# scripts and torn down on exit.
+#
+# The tool-mode backends reference this server as a STATIC MCP target
+# (spec.entMcp.targets[].static, protocol SSE), so the Service does not
+# need the agentgateway.dev/mcp appProtocol label.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-website-fetcher
+  labels:
+    app: mcp-website-fetcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-website-fetcher
+  template:
+    metadata:
+      labels:
+        app: mcp-website-fetcher
+    spec:
+      containers:
+        - name: mcp-website-fetcher
+          image: ghcr.io/peterj/mcp-website-fetcher:main
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-website-fetcher
+  labels:
+    app: mcp-website-fetcher
+spec:
+  selector:
+    app: mcp-website-fetcher
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000

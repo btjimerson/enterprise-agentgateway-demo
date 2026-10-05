@@ -1,0 +1,64 @@
+# Requires a valid JWT on every request to the agentgateway-proxy
+# Gateway. The gateway accepts tokens from either of two issuers:
+#
+#   1. Keycloak — direct user logins (security-01, routing-*, etc).
+#      The token's `iss` is Keycloak's realm URL.
+#
+#   2. The agentgateway STS — delegated tokens from the RFC 8693
+#      token-exchange flow (security-03-obo). The token's `iss` is
+#      the STS endpoint, signed by an STS-managed key. Trusting
+#      this issuer is what lets the OBO delegated token be USED
+#      against downstream routes (not just minted at /oauth2/token).
+#
+# Without provider #2 the gateway rejects every OBO delegated token
+# with `authentication failure: token uses the unknown key <kid>` — the
+# OBO demo can mint the token but can't actually exercise it. Adding
+# the STS as a second provider is also how a real OBO deployment is
+# configured: the platform team trusts both the IDP (for users) and
+# the STS (for delegated workload calls).
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: jwt-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+        # issuer = what the external Keycloak stamps as `iss`, rendered
+        # at apply time from ${KEYCLOAK_ISSUER} (see _common.sh apply_and_wait →
+        # envsubst). The controller fetches JWKS over PLAIN HTTP via a backendRef
+        # and can't reach the external HTTPS Keycloak directly, so it points at
+        # the in-cluster keycloak-jwks-proxy (Caddy HTTP→HTTPS bridge, installed
+        # by 01-install-agentgateway.sh). jwksPath has NO leading slash — the
+        # controller joins it onto host:port and a leading `/` yields `//realms`.
+        - issuer: "${KEYCLOAK_ISSUER}"
+          jwks:
+            remote:
+              jwksPath: "realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs"
+              cacheDuration: "5m"
+              backendRef:
+                kind: Service
+                name: keycloak-jwks-proxy
+                namespace: agentgateway-system
+                port: 8080
+        - issuer: "enterprise-agentgateway.agentgateway-system.svc.cluster.local:7777"
+          jwks:
+            remote:
+              # No leading slash on jwksPath — the controller joins
+              # this onto the backendRef host:port and a leading `/`
+              # causes a `//.well-known/...` request which the STS
+              # 404s. Status condition surfaces this as
+              # `PartiallyValid: jwks ConfigMap ... isn't available`.
+              jwksPath: ".well-known/jwks.json"
+              cacheDuration: "5m"
+              backendRef:
+                kind: Service
+                name: enterprise-agentgateway
+                namespace: agentgateway-system
+                port: 7777

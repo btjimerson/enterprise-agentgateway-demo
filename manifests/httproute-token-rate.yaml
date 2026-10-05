@@ -1,0 +1,26 @@
+# Dedicated route for the per-user token-rate demo (p02-routing-08).
+#
+# This demo owns its own route on purpose. It used to attach its policy to /chat,
+# which p02-routing-03 also targets with entRateLimit — two entRateLimit policies
+# on one route collide non-deterministically, so the demo needed a pre-flight
+# `kubectl delete` of the other demo's policy to work at all. Owning /token-rate
+# removes that coupling entirely (same approach p02-routing-10 takes with
+# /budget-demo).
+#
+# Single-provider OpenAI backend: token accounting is clearer against one real
+# LLM than across a failover group.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: token-rate
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: agentgateway-system
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /token-rate}
+      timeouts: {request: 120s}
+      backendRefs:
+        - {group: agentgateway.dev, kind: AgentgatewayBackend, name: openai-primary}

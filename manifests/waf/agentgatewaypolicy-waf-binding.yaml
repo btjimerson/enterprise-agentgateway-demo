@@ -1,0 +1,42 @@
+# Binds the chat-waf WAFPolicy to the `chat` HTTPRoute. Without this, the
+# WAFPolicy exists but is inert — the WAF server is never told which traffic to
+# filter through it.
+#
+# ── This is NOT the kgateway shape (Solo's other gateway product) ────────────────────────────────────────
+# The WAFPolicy CRD (waf.solo.io/v1alpha1) is shared between the two products,
+# so rule YAML ports over unchanged. The BINDING does not:
+#
+#   enterprise-kgateway     EnterpriseKgatewayTrafficPolicy  spec.entWAF.wafPolicyRef
+#   enterprise-agentgateway EnterpriseAgentgatewayPolicy     spec.traffic.entWAF.wafPolicyRef
+#
+# Note the extra `traffic` level on the agentgateway side. Copying the kgateway
+# manifest across and only renaming the kind produces a resource that is
+# accepted but never attaches.
+#
+# CEL validation on the CRD enforces:
+#   - exactly one of [wafPolicyRef, disable]
+#   - at most one of [wafServerRef, disable]
+# wafServerRef is only needed to point at a non-default WAF server Service.
+#
+# Route-level vs Gateway-level: this targets the HTTPRoute. Set
+# targetRefs[].kind=Gateway to cover every route on the gateway; a route-level
+# policy can then opt out with `entWAF.disable: {}`.
+#
+# Check attachment with:
+#   kubectl -n agentgateway-system get enterpriseagentgatewaypolicy chat-waf-binding \
+#     -o jsonpath='{.status.ancestors[0].conditions}'
+# Expect Accepted=True/Valid and Attached=True/"Attached to all targets".
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-waf-binding
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  traffic:
+    entWAF:
+      wafPolicyRef:
+        name: chat-waf

@@ -1,0 +1,30 @@
+# CEL-based MCP tool authorization:
+# - alice is restricted to `echo` and `get-sum` on either federated target
+# - bob can call every tool from either MCP server
+#
+# agentgateway prefixes every federated tool name with `<target>-<port>_`
+# (e.g. `mcp-server-everything-3001_echo`), so the CEL matches on suffix
+# rather than exact name.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: mcp-rbac
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mcp-federated
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            # `mcp.tool.name` is the RESOLVED upstream tool name (unprefixed);
+            # `mcp.tool.target` is the target handling the call after
+            # multiplexing resolution. Using the unprefixed names matches the
+            # tool on both federated targets.
+            - 'jwt.preferred_username == "alice" && (mcp.tool.name == "echo" || mcp.tool.name == "get-sum")'
+            # Bob: all tools on either target
+            - 'jwt.preferred_username == "bob"'

@@ -1,0 +1,213 @@
+# Two OpenAI-compatible stand-ins for self-hosted vLLM servers, used by the
+# p09-selfhosted demo pillar.
+#
+# WHY MOCKS, SAID PLAINLY — this matters if an audience asks:
+#   The gateway configuration in this pillar is byte-for-byte what a real vLLM
+#   target needs (see manifests/agentgatewaybackend-vllm.yaml). What is mocked is
+#   only the inference itself. Real vLLM is not runnable on this cluster: the
+#   nodes have no GPU, no published vLLM CPU image exists (every tag on
+#   vllm/vllm-openai is a CUDA build), and the CPU platform is AMD Rome — AVX2,
+#   no AVX512, which vLLM's CPU backend has historically required.
+#
+#   Keep this in mind when reading the output: the claim being demonstrated is
+#   about the gateway, not about model quality.
+#
+# Both Deployments run the same code from one ConfigMap, distinguished by the
+# SERVED_MODEL env var, mirroring how a vLLM server is launched with
+# `vllm serve <model>` and then reports that model id back on /v1/models.
+#
+# The endpoints implemented are the three a gateway actually touches:
+#   GET  /health              — vLLM's liveness endpoint
+#   GET  /v1/models           — served model id; the gateway probes this
+#   POST /v1/chat/completions — inference
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-mock-app
+  namespace: agentgateway-demo
+data:
+  server.py: |
+    import json, os, socket, time, uuid
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    # Set per Deployment. A real vLLM server reports whatever model it was
+    # launched with; this is the mock's equivalent of `vllm serve <model>`.
+    SERVED_MODEL = os.environ.get("SERVED_MODEL", "unknown-model")
+    POD = socket.gethostname()
+
+    class H(BaseHTTPRequestHandler):
+        # Silence per-request stderr logging. The audit trail this demo shows
+        # comes from the gateway's access log, not from the backend.
+        def log_message(self, fmt, *args):
+            return
+
+        def _json(self, code, obj):
+            data = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            # Lets the demo prove which backend served a response without
+            # relying on the body, the way a real deployment would use
+            # response-header attribution.
+            self.send_header("X-Vllm-Served-Model", SERVED_MODEL)
+            self.send_header("X-Vllm-Pod", POD)
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            if self.path.startswith("/health"):
+                return self._json(200, {"status": "ok", "model": SERVED_MODEL})
+            if self.path.startswith("/v1/models"):
+                # vLLM's /v1/models shape: one entry, owned by "vllm".
+                return self._json(200, {
+                    "object": "list",
+                    "data": [{
+                        "id": SERVED_MODEL,
+                        "object": "model",
+                        "created": int(time.time()),
+                        "owned_by": "vllm",
+                    }],
+                })
+            return self._json(404, {"error": {"message": "not found"}})
+
+        def do_POST(self):
+            if not self.path.startswith("/v1/chat/completions"):
+                return self._json(404, {"error": {"message": "not found"}})
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw)
+            except Exception:
+                payload = {}
+
+            messages = payload.get("messages", [])
+            user_msg = ""
+            system_msg = ""
+            for m in messages:
+                if m.get("role") == "user":
+                    user_msg = m.get("content", "") or ""
+                elif m.get("role") == "system":
+                    system_msg = m.get("content", "") or ""
+
+            # Echo the system prompt when one is present. The per-backend
+            # policy in this pillar injects a different system prompt per
+            # backend, and echoing it is what makes that policy VISIBLE in the
+            # response rather than something you have to take on trust.
+            if system_msg:
+                content = (
+                    f"[{SERVED_MODEL}] system prompt in effect: \"{system_msg}\" | "
+                    f"you asked: {user_msg[:160]}"
+                )
+            else:
+                content = f"[{SERVED_MODEL}] you asked: {user_msg[:160]}"
+
+            # Token counts vary with real input length so the audit log and
+            # any token-based policy show differing numbers per request rather
+            # than a constant that looks obviously fake.
+            prompt_tokens = max(1, len((system_msg + " " + user_msg).split()))
+            completion_tokens = max(1, len(content.split()))
+
+            self._json(200, {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                # Report the model this server actually serves, NOT the model
+                # the client asked for. That difference is what makes
+                # llm.requestModel vs llm.responseModel meaningful in the
+                # access log.
+                "model": SERVED_MODEL,
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }],
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
+                },
+            })
+
+    if __name__ == "__main__":
+        HTTPServer(("0.0.0.0", 8000), H).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gemma
+  namespace: agentgateway-demo
+  labels: {app: vllm-gemma, demo: selfhosted}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: vllm-gemma}}
+  template:
+    metadata:
+      labels: {app: vllm-gemma}
+    spec:
+      containers:
+        - name: vllm
+          image: python:3.12-slim
+          command: ["python3", "/app/server.py"]
+          env:
+            - {name: SERVED_MODEL, value: "gemma-4"}
+          ports: [{containerPort: 8000}]
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - {name: app, mountPath: /app}
+      volumes:
+        - name: app
+          configMap: {name: vllm-mock-app}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gemma
+  namespace: agentgateway-demo
+spec:
+  selector: {app: vllm-gemma}
+  ports:
+    - {name: http, port: 80, targetPort: 8000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-llama
+  namespace: agentgateway-demo
+  labels: {app: vllm-llama, demo: selfhosted}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: vllm-llama}}
+  template:
+    metadata:
+      labels: {app: vllm-llama}
+    spec:
+      containers:
+        - name: vllm
+          image: python:3.12-slim
+          command: ["python3", "/app/server.py"]
+          env:
+            - {name: SERVED_MODEL, value: "llama-30"}
+          ports: [{containerPort: 8000}]
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - {name: app, mountPath: /app}
+      volumes:
+        - name: app
+          configMap: {name: vllm-mock-app}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-llama
+  namespace: agentgateway-demo
+spec:
+  selector: {app: vllm-llama}
+  ports:
+    - {name: http, port: 80, targetPort: 8000}

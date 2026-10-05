@@ -1,0 +1,50 @@
+# EnterpriseAgentgatewayBudget (agentgateway 2026.6.3): declarative LLM spend
+# limits. One resource, multiple independent entries. Each entry:
+#   limit  : amount + unit (USD | Tokens)   — USD = whole dollars, minimum 1
+#   window : Day | Week | Month | Year      — rolling window
+#   onBudgetExceeded : Audit (log overage, allow) | Block (reject with HTTP 429)
+#
+# This budget defines TWO entries, both in Tokens, so BOTH actually fire and the
+# demo can show Audit and Block on identical traffic:
+#   - demo-token-audit: 500 tokens/week, Audit — trips first. The request is
+#                       ALLOWED (HTTP 200) and the proxy logs an
+#                       outcome="over_limit_audit" line. This is the
+#                       meter-first-block-later rollout story.
+#   - demo-token-block: 2000 tokens/day, Block — trips later, rejecting with 429.
+#
+# Every request matches BOTH entries and each entry's counter is debited
+# independently, so the audit entry crosses its limit several requests before the
+# block entry crosses its own.
+#
+# WHY BOTH ENTRIES USE DIFFERENT WINDOWS
+# The CRD rejects duplicate (subject, unit, window) combinations:
+#   "budget entries must not have duplicate (subject, unit, window) combinations"
+# Two Tokens entries with no subject must therefore differ by window — hence
+# Week for audit vs Day for block. Do not "tidy" both onto Day; it will not apply.
+#
+# WHY NOT A USD ENTRY
+# This pair used to be $5/day Audit + 2000 tokens/day Block. The USD entry could
+# never fire, for two reasons: USD spend requires a model cost catalog wired via
+# EnterpriseAgentgatewayParameters.spec.modelCatalog (unset here, and unpriced
+# models contribute nothing), and USD amounts are whole dollars with a minimum of
+# 1 — the demo's ~550-token gpt-4o requests cost a fraction of a cent, so
+# reaching $1 would take thousands of them. USD budgets are real, but they are
+# illustrative here, not something demonstrable live.
+#
+# A budget only DEFINES limits — it does nothing until an EnterpriseAgentgatewayPolicy
+# with entBudgetEnforcement targets a route (see policy-budget-enforcement.yaml).
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBudget
+metadata:
+  name: budget-demo
+  namespace: agentgateway-system
+spec:
+  budgets:
+    - name: demo-token-audit
+      limit: {unit: Tokens, amount: 500}
+      window: {unit: Week}
+      onBudgetExceeded: Audit
+    - name: demo-token-block
+      limit: {unit: Tokens, amount: 2000}
+      window: {unit: Day}
+      onBudgetExceeded: Block

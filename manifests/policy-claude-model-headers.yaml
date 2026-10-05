@@ -1,0 +1,36 @@
+# The "model header trick" — echo the requested vs. actual model as response
+# headers so you can SEE that the passthrough backend honors the client's model:
+#   x-requested-model = the model in the REQUEST body  (what the client asked for)
+#   x-actual-model    = the model in the RESPONSE body (what Anthropic actually used)
+#
+# With the passthrough backend (no pinned model) these two MATCH and track
+# whatever model you select — proof the client's choice flows through. If you
+# pinned a model on the backend instead, x-actual-model would stay fixed
+# regardless of x-requested-model (override).
+#
+# CAVEAT: this reads the response BODY as a single JSON object, so it works for
+# NON-streaming requests (a plain curl, as the demo uses). Claude Code STREAMS
+# (SSE), so its response body is not one JSON object — for live Claude Code
+# traffic, read the model from the proxy logs instead:
+#   kubectl -n agentgateway-system logs deploy/agentgateway-proxy | grep gen_ai.request.model
+#
+# Targets the `claude` HTTPRoute. Used by
+# demo/p02-routing-11-claude-code-passthrough.sh.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: claude-model-headers
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: claude
+  traffic:
+    transformation:
+      response:
+        set:
+          - name: x-requested-model
+            value: 'string(json(request.body).model)'
+          - name: x-actual-model
+            value: 'string(json(response.body).model)'

@@ -1,0 +1,38 @@
+# EnterpriseAgentgatewayPolicy that wires the github-mcp-backend through
+# the OAuth elicitation flow.
+#
+# `backend.tokenExchange.elicitation.secretName` points at a Secret that
+# carries the OAuth client_id + client_secret + endpoints for the
+# external IdP (GitHub in this case). The secret is created at runtime
+# by demo/security-05-elicitation-github.sh so the operator can plug in
+# their own registered GitHub App credentials via env vars.
+#
+# Field rename note (2.2 breaking change): the per-backend token-
+# exchange field was renamed from `oidc` to `elicitation` between RC
+# and GA. Manifests targeting 2.2.0-rc.0 or earlier use `oidc:`; the
+# `elicitation:` block here is the GA shape.
+#
+# Flow at runtime:
+#   1. MCP client calls tools/call against /mcp-github (with user JWT).
+#   2. agentgateway sees this backend has a token-exchange policy.
+#   3. STS looks up stored credential for (userId, this-backend) — none.
+#   4. agentgateway returns HTTP 500 with body
+#         { "url": "<elicitation URL>", "status_url": null }
+#   5. User opens the elicitation URL in a browser → Solo UI → GitHub
+#      OAuth consent → callback → STS persists the access token.
+#   6. Client retries the same tools/call → agentgateway injects the
+#      stored GitHub token into the upstream Authorization header.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: github-mcp-elicit-policy
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - name: github-mcp-backend
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+  backend:
+    tokenExchange:
+      elicitation:
+        secretName: elicitation-oidc-github

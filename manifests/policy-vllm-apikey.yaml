@@ -1,0 +1,41 @@
+# API-key authentication on /vllm, resolving each key to a named identity.
+#
+# `configMapSelector` selects by LABEL, not by name, so keys can be split across
+# several ConfigMaps (per team, per environment) and all are consulted. The
+# matching label must be present on the ConfigMap or the policy quietly finds no
+# keys and every request fails to authenticate.
+#
+# mode: Strict — a request without a recognized key is rejected. `Optional` would
+# let unauthenticated traffic through with no identity attached, which is the
+# opposite of what an audit trail needs.
+#
+# The key travels in `x-api-key` rather than `Authorization`. That is deliberate:
+# the JWT policy in this walkthrough reads `Authorization: Bearer`, and pointing
+# both policies at the same header means whichever runs second tries to parse the
+# other's credential. Separate headers let JWT and API-key auth coexist.
+#
+# INTERACTION WORTH KNOWING, verified live: policies STACK, they do not override.
+# With the gateway-wide `jwt-auth` policy applied, /vllm requires BOTH a valid
+# JWT and a valid API key — either one alone returns 401. `jwt-auth` is applied
+# only by the p05 security demos and removed by their cleanup, so it is normally
+# absent; demo/p09-selfhosted-03-vllm-identity-audit.sh checks for it explicitly
+# rather than letting a leftover produce a confusing 401 mid-demo.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: vllm-apikey-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vllm
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      location:
+        header:
+          name: x-api-key
+      configMapSelector:
+        matchLabels:
+          agentgateway.dev/apikey: "true"

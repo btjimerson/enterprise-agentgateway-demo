@@ -1,0 +1,17 @@
+# Failover LLM provider: the mock-llm Service in agentgateway-demo. Declared
+# as an "openai-compatible" backend so agentgateway expects /v1/chat/completions.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mock-failover
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: mock-failover
+            host: mock-llm.agentgateway-demo.svc.cluster.local
+            port: 80
+            path: /v1/chat/completions
+            openai:
+              model: mock-llm-1

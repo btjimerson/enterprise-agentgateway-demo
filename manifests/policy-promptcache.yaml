@@ -1,0 +1,25 @@
+# Prompt caching policy. Only supported on providers that implement prompt
+# caching (Bedrock/Anthropic). For OpenAI this is a no-op at the provider level.
+#
+# NOT PART OF THE DEMO SET. Its only consumer is
+# demo/deprecated/prompt-caching.sh, which was cut because nothing about it was
+# observable — see that file's header. Kept as a reference for the policy
+# shape. Note minTokens below: at 1024 it will not trigger on a short prompt even
+# on a provider that caches, which was one of the three reasons the step failed.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-promptcache
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  backend:
+    ai:
+      promptCaching:
+        cacheSystem: true
+        cacheMessages: false
+        cacheTools: false
+        minTokens: 1024

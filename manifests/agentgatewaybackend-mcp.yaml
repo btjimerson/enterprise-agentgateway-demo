@@ -1,0 +1,32 @@
+# Federates multiple MCP servers behind a single logical MCP endpoint.
+# Clients connect to this one backend and see the union of tools exposed by
+# both servers — that's the "MCP multiplexing" story.
+#
+# Namespace is NOT a direct field on selector.services. The selector has a
+# separate `namespaces` matcher that filters on namespace *labels*. We use
+# the built-in `kubernetes.io/metadata.name` label that Kubernetes sets
+# automatically on every namespace, so no extra labeling is required.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-federated
+  namespace: agentgateway-system
+spec:
+  mcp:
+    targets:
+      - name: everything
+        selector:
+          services:
+            matchLabels:
+              app: mcp-server-everything
+          namespaces:
+            matchLabels:
+              kubernetes.io/metadata.name: agentgateway-demo
+      - name: extra
+        selector:
+          services:
+            matchLabels:
+              app: mcp-tools-extra
+          namespaces:
+            matchLabels:
+              kubernetes.io/metadata.name: agentgateway-demo

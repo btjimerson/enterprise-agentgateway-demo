@@ -1,0 +1,37 @@
+# Second Gateway in the enterprise-agentgateway class. Dedicated to admin
+# UIs (Keycloak, Grafana, Solo Enterprise UI) so none of the demo-level
+# policies (jwt-auth, prompt-guard, chat-ratelimit) accidentally touch
+# that traffic — those policies target `agentgateway-proxy` by name.
+#
+# One Gateway with three listeners → one LoadBalancer with three ports.
+# Routes attach from any namespace so each HTTPRoute can live next to its
+# backend Service (avoiding cross-namespace ReferenceGrants).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: admin-proxy
+  namespace: agentgateway-system
+spec:
+  gatewayClassName: enterprise-agentgateway
+  listeners:
+    - name: grafana
+      protocol: HTTP
+      port: 3000
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: ui
+      protocol: HTTP
+      port: 4000
+      allowedRoutes:
+        namespaces:
+          from: All
+    # Added by 09-install-obo.sh — exposes the agentgateway built-in STS
+    # (OAuth 2.0 /oauth2/token endpoint) so the demo curl can drive RFC 8693
+    # token exchange without a port-forward.
+    - name: sts
+      protocol: HTTP
+      port: 7777
+      allowedRoutes:
+        namespaces:
+          from: All

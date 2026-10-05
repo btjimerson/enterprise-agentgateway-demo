@@ -1,0 +1,38 @@
+# Prompt guardrails on the /chat route.
+#
+# Request side: reject any prompt containing built-in PII patterns or a
+# known prompt-injection phrase.
+# Response side: mask the same PII patterns in the model's reply.
+#
+# Schema reality check: regex has only `action`, `builtins`, `matches`.
+# There's no custom `response` body inside regex — a Reject action returns
+# a fixed error message.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: prompt-guard
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - regex:
+              action: Reject
+              builtins:
+                - CreditCard
+                - Ssn
+                - Email
+                - PhoneNumber
+              matches:
+                - "ignore (all )?previous instructions"
+        response:
+          - regex:
+              action: Mask
+              builtins:
+                - CreditCard
+                - Ssn

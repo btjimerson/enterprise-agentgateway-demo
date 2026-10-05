@@ -1,0 +1,48 @@
+# Temporary variant used only by demo/p02-routing-02-failover.sh.
+#
+# Note both providers below are configured IDENTICALLY apart from the host: same
+# port, same `/v1/chat/completions` path. The primary fails because that provider
+# is unhealthy — mock-llm-broken runs with FAIL_ALL=1 and returns HTTP 500 with
+# an OpenAI-shaped error body — not because it was pointed at a special error
+# endpoint. That's how a real provider outage looks, and it keeps the spec from
+# telegraphing the rig when the demo shows this file.
+#
+# The 500 is a *real* upstream response (not proxy-synthesized), so the
+# `failover-health` policy's `unhealthyCondition: response.code >= 500` evaluates
+# true and evicts the provider from its priority group. A refused connection
+# would NOT work here — the proxy synthesizes those and they bypass
+# unhealthyCondition evaluation entirely.
+#
+# The client still receives that first 500 — eviction is the policy's reaction
+# AFTER the failure, and no retry policy is applied here on purpose (see
+# policy-health-retry.yaml for why). Requests 2+ find group 0 evicted and route
+# to group 1 (the healthy mock-llm), which returns 200.
+#
+# This file is applied briefly by p02-routing-02-failover.sh and replaced with
+# the normal agentgatewaybackend-multi.yaml on exit.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: multi-provider
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: openai-primary
+            host: mock-llm-broken.agentgateway-demo.svc.cluster.local
+            port: 80
+            path: /v1/chat/completions
+            openai:
+              model: gpt-4o
+            policies:
+              auth:
+                secretRef:
+                  name: openai-secret
+      - providers:
+          - name: mock-failover
+            host: mock-llm.agentgateway-demo.svc.cluster.local
+            port: 80
+            path: /v1/chat/completions
+            openai:
+              model: mock-llm-1

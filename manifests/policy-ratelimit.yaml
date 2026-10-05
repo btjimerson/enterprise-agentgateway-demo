@@ -1,0 +1,16 @@
+# Attaches the per-user-5-per-min RateLimitConfig to the /chat HTTPRoute.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: chat-ratelimit
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: chat
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+          - name: per-user-5-per-min

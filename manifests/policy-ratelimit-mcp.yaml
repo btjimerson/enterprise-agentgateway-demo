@@ -1,0 +1,20 @@
+# MCP rate limit: reuse the shared per-user-5-per-min RateLimitConfig
+# but attach it to the /mcp HTTPRoute. Every tools/list or tools/call
+# through agentgateway counts against the same per-user budget the
+# /chat route has — clients can't burn their quota by switching
+# surface.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: mcp-ratelimit
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+          - name: per-user-5-per-min

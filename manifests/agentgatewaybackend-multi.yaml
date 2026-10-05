@@ -1,0 +1,26 @@
+# Multi-provider routing group: OpenAI first (group 0), mock-llm as failover
+# (group 1). agentgateway only falls back to group 1 when every provider in
+# group 0 is marked unhealthy by the health policy (policy-health-retry.yaml).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: multi-provider
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: openai-primary
+            openai:
+              model: gpt-4o
+            policies:
+              auth:
+                secretRef:
+                  name: openai-secret
+      - providers:
+          - name: mock-failover
+            host: mock-llm.agentgateway-demo.svc.cluster.local
+            port: 80
+            path: /v1/chat/completions
+            openai:
+              model: mock-llm-1
