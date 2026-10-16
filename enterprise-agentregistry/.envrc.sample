@@ -1,0 +1,202 @@
+# Environment for the Solo Enterprise for Agentregistry demo.
+# Copy from .envrc.sample, fill in the secrets, then run: direnv allow
+#
+# Abbreviation used throughout: "enterprise-ar" (never "are" or
+# "agentregistry" on its own) — keeps shell history and docs searchable.
+
+# --- License keys / API keys (required) ---
+# Enterprise kagent license (passed to the management + kagent-enterprise
+# charts as licensing.licenseKey).
+export KAGENT_LICENSE_KEY="<paste>"
+# Used by the kagent controller's built-in k8s-agent (OpenAI provider).
+export OPENAI_API_KEY="<paste>"
+# Gemini key for the scaffolded demo agent (model gemini-2.5-flash, per the
+# quickstart). Required for deploy-0x + chat; "fake" is fine for no-op demos.
+export GOOGLE_API_KEY="<paste>"
+# The agentregistry server image is PUBLIC (solo-public OCI), so no
+# license/pull-secret is needed for the registry itself. Uncomment only if you
+# point AGENTREGISTRY_CHART at a gated registry.
+# export AGENTREGISTRY_LICENSE_KEY="<paste>"
+
+# --- Cluster / namespace configuration ---
+# CLUSTER_CONTEXT defaults to `kubectl config current-context` at runtime.
+# export CLUSTER_CONTEXT="my-specific-context"
+# CLUSTER_TYPE switches image handling + service exposure:
+#   gke  → LoadBalancer external IPs, push demo images to a registry
+#   kind → cloud-provider-kind LBs (or port-forward fallback), `kind load`
+export CLUSTER_TYPE="gke"
+export AGENTREGISTRY_NAMESPACE="agentregistry-system"
+# kagent AND the management chart (UI, ClickHouse, telemetry) both install
+# into this single namespace. Do not split them.
+export KAGENT_NAMESPACE="kagent"
+export DEMO_APPS_NAMESPACE="enterprise-ar-demo"
+
+# --- Enterprise Agentregistry (public solo-public OCI) ---
+export AGENTREGISTRY_VERSION="2026.9.0"
+export AGENTREGISTRY_CHART="oci://us-docker.pkg.dev/solo-public/agentregistry-enterprise/helm/agentregistry-enterprise"
+# Helm release name. Chart fullname is "agentregistry-enterprise-*" regardless
+# of release name → Service "agentregistry-enterprise-server".
+export AGENTREGISTRY_RELEASE="agentregistry"
+
+# --- Enterprise kagent + management charts (public solo-public OCI) ---
+# This must equal the enterprise-agentgateway demo's UI_MANAGEMENT_VERSION, because
+# both install the shared Solo management CRDs and a co-install in one cluster
+# needs one schema. That value is set by the agentgateway demo's fine-grained RBAC
+# baseline (see its .envrc.sample); the agentregistry matrix pins
+# kagent-enterprise by COMMIT, not version, so it imposes no pairing of its own.
+export KAGENT_ENT_VERSION="0.5.10"
+# Management RBAC mode (same chart as agentgateway's UI). Both installers upgrade
+# the one `management` release, so whichever runs last decides the mode; keep
+# this equal to enterprise-agentgateway's UI_RBAC_MODE.
+export UI_RBAC_MODE="fine-grained"
+# Version of the shared `management` chart (the Solo UI). Defaults to
+# KAGENT_ENT_VERSION if unset; override to pin the UI independently of kagent —
+# e.g. to match a co-installed agentgateway demo (which uses the same
+# UI_MANAGEMENT_VERSION variable for this chart). Keep both demos' values
+# compatible since they share the management CRDs — in practice that means
+# equal, so leave this unset unless you are deliberately testing a mismatch.
+# export UI_MANAGEMENT_VERSION="<see ../enterprise-agentgateway/.envrc.sample>"
+export MANAGEMENT_CHART="oci://us-docker.pkg.dev/solo-public/solo-enterprise-helm/charts/management"
+export KAGENT_CHART="oci://us-docker.pkg.dev/solo-public/kagent-enterprise-helm/charts/kagent-enterprise"
+export KAGENT_CRDS_CHART="oci://us-docker.pkg.dev/solo-public/kagent-enterprise-helm/charts/kagent-enterprise-crds"
+
+# --- arctl CLI (tracks the agentregistry release train) ---
+# 04-install-arctl.sh resolves arctl in this order:
+#   1. $ARCTL_BIN (explicit override, uncomment below)
+#   2. `command -v arctl` — whatever's on your $PATH
+#   3. Installs the pinned version via the official install.sh into ~/.arctl/bin
+# export ARCTL_BIN="/absolute/path/to/arctl"
+# arctl tracks agentregistry releases — there is no 2026.8.x arctl.
+export ARCTL_VERSION="v2026.9.0"
+# Registry REST API after 04-install-arctl.sh port-forwards the server to
+# localhost. NOTE: no /v0 suffix — arctl appends the API path.
+export ARCTL_API_BASE_URL="http://localhost:12121"
+
+# --- Keycloak (external IdP — you provide it) ---
+# The demo expects an EXTERNAL Keycloak 26 reachable over HTTPS from both your
+# browser and the cluster; there is no in-cluster Keycloak. Import
+# ../keycloak/realm-demo.json into it (see the README "Keycloak")
+# and set KEYCLOAK_EXTERNAL_URL to its public URL. The issuer + JWKS are public
+# HTTPS, reachable by both the browser and the in-cluster registry/kagent/UI backends.
+export KEYCLOAK_EXTERNAL_URL="https://keycloak.example.com"
+export KEYCLOAK_EXTERNAL_HOST="${KEYCLOAK_EXTERNAL_URL#https://}"   # bare host
+export KEYCLOAK_REALM="solo"
+export KEYCLOAK_ISSUER="${KEYCLOAK_EXTERNAL_URL}/realms/${KEYCLOAK_REALM}"
+export KEYCLOAK_JWKS_URL="${KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
+# agentregistry clients (declared in ../keycloak/realm-demo.json):
+export AR_BACKEND_CLIENT_ID="ar-backend"             # confidential, server token validation
+export AR_CLI_INTERACTIVE_CLIENT_ID="ar-cli-interactive"  # public, device flow
+export AR_CLI_PASSWORD_CLIENT_ID="ar-cli-password"   # public, ROPG (headless CLI/CI)
+export KAGENT_BACKEND_CLIENT_ID="kagent-backend"     # confidential (kagent controller)
+# The browser UI uses the Solo Enterprise UI clients:
+export AR_PUBLIC_CLIENT_ID="solo-ui-frontend"        # public, browser UI (PKCE)
+export KAGENT_PUBLIC_CLIENT_ID="solo-ui-frontend"    # public, browser UI (PKCE)
+export SOLO_UI_FRONTEND_CLIENT="solo-ui-frontend"
+export SOLO_UI_BACKEND_CLIENT="solo-ui-backend"
+# Choose your own value; it is substituted into the realm import AND handed to the
+# UI backend, so the two must match.  e.g.  openssl rand -hex 24
+export SOLO_UI_BACKEND_SECRET="<generate>"
+# Browser-facing UI URL (the SPA builds API calls + the OIDC redirect from it).
+# The UI is reached over a localhost port-forward.
+export SOLO_UI_URL="http://localhost:4000"
+# Group-claim the registry maps to RBAC roles (chart oidc.roleClaim). The realm
+# group-membership mapper emits this exact claim name (capital G).
+export KEYCLOAK_ROLE_CLAIM="Groups"
+# Backend client secrets: choose your own values (openssl rand -hex 24). They are
+# substituted into the realm import, so Keycloak must be started with the SAME values.
+# Used twice: the registry validates INBOUND tokens with this client, and
+# 05-register-runtimes.sh also stores it as the registry Secret `kagent-oidc` so the
+# kagent Runtime can mint its OUTBOUND client-credentials token (config.auth.oidc,
+# mandatory since 2026.8.0). ar-backend carries the kagent-backend audience
+# mapper the controller requires; see the realm file.
+export AR_BACKEND_SECRET="<generate>"
+export KAGENT_BACKEND_SECRET="<generate>"
+
+# --- Demo users (created by the realm import; choose your own passwords) ---
+export DEMO_USER_ADMIN="admin-user"
+export DEMO_USER_ADMIN_PASSWORD="<choose>"   # group=admins  → registry superuser
+export DEMO_USER_WRITER="writer-user"
+export DEMO_USER_WRITER_PASSWORD="<choose>"   # group=writers
+export DEMO_USER_READER="reader-user"
+export DEMO_USER_READER_PASSWORD="<choose>"   # group=readers
+
+# --- Demo agent model (scaffolded by arctl init agent) ---
+export DEMO_AGENT_MODEL_PROVIDER="gemini"
+export DEMO_AGENT_MODEL_NAME="gemini-2.5-flash"
+
+# --- Demo image handling ---
+# kind: images are loaded into the node via `kind load` from this local-name
+# registry. gke: demo images are pushed here, and the registry MUST be pullable
+# by the cluster nodes (a PUBLIC ghcr package, or a GCP Artifact Registry in the
+# cluster's project — e.g. us-docker.pkg.dev/<project>/<repo>).
+export LOCAL_IMAGE_REGISTRY="localhost:5001"
+# NOTE: ${USER} is your OS login, NOT necessarily your GitHub username. ghcr.io
+# namespaces are GitHub usernames — set this explicitly to yours (you must also
+# `docker login ghcr.io` with a PAT that has write:packages, and make the pushed
+# package public so the gke nodes can pull it). deploy-01 builds for linux/amd64
+# on gke; override with AGENT_BUILD_PLATFORM if your node pool is arm64.
+export DEMO_DOCKER_REGISTRY="ghcr.io/your-github-username"
+
+# --- Cloud runtimes (optional — deploy-02/03 degrade gracefully if unset) ---
+# AWS Bedrock requires a one-time setup the demo does NOT automate — see the
+# header of demo/deploy-02-aws-bedrock.sh. In short: `arctl runtime setup
+# bedrock-agent-core` → deploy the CloudFormation → read RoleArn + ExternalId
+# from the stack Outputs; AWS_PROVIDER_EXTERNAL_ID must match the role's trust
+# policy.
+# export AWS_ACCOUNT_ID=""
+# export AWS_PROVIDER_ROLE_ARN=""
+# export AWS_PROVIDER_EXTERNAL_ID=""
+# export AWS_RUNTIME_NAME="aws-bedrock"
+#
+# Region the registry's syncer discovers/deploys AgentCore agents in, and the
+# region stamped on the registry pod. Defaults to us-east-1 if unset.
+# export AWS_REGION="us-east-1"
+#
+# The registry runs IN-CLUSTER (no EC2 instance role), so it can't reach IMDS —
+# Bedrock calls fail with "no EC2 IMDS role found" unless you give it static
+# credentials. Set an IAM user's keys (the user must be allowed to sts:AssumeRole
+# the AWS_PROVIDER_ROLE_ARN); 05-register-runtimes.sh wires them onto the registry
+# (Secret aws-creds + deploy env) before registering the Bedrock Runtime.
+#
+# NAMING: the REGISTRY_ prefix is deliberate and load-bearing. Do NOT
+# use bare AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY here. The AWS credential chain
+# resolves environment variables BEFORE a named profile, so on an EKS cluster —
+# where kubeconfig authenticates with `aws eks get-token` and AWS_PROFILE pinned in
+# the exec env — a bare AWS_ACCESS_KEY_ID exported from this file overrides that
+# profile. The plugin then mints a token for the wrong IAM identity and every
+# kubectl call fails with "failed to download openapi: the server has asked for the
+# client to provide credentials", which reads like a validation problem and is not.
+# AWS_SESSION_TOKEN would collide the same way. 05-register-runtimes.sh maps these
+# onto the Secret keys the registry pod actually reads, which stay AWS_*.
+# export REGISTRY_AWS_ACCESS_KEY_ID=""
+# export REGISTRY_AWS_SECRET_ACCESS_KEY=""
+#
+# --- Azure / Microsoft Foundry (optional — DISCOVERY only) ---
+# Shadows agents already running in a Microsoft Foundry project (discovery only;
+# the registry never deploys to Foundry). Runtime type MicrosoftFoundry. Auth is
+# the Entra client-credentials flow (scope https://ai.azure.com/.default); the
+# registry lists {projectEndpoint}/agents?api-version=v1.
+#
+# Azure prereqs (manual — see demo/discover-01-foundry.sh header):
+#   1. Entra app registration → Application (client) ID + Directory (tenant) ID +
+#      a client secret.
+#   2. A Foundry PROJECT endpoint (not the account endpoint):
+#        https://<account>.services.ai.azure.com/api/projects/<project>
+#   3. "Foundry User" RBAC granted to the app ON THE PROJECT resource.
+#   4. At least one agent created in the project (discovery shows existing agents).
+# 05-register-runtimes.sh stores the secret via the registry Secret API and
+# registers the Runtime when these four are set; degrades gracefully if unset.
+# export AZURE_FOUNDRY_TENANT_ID=""
+# export AZURE_FOUNDRY_CLIENT_ID=""
+# export AZURE_FOUNDRY_CLIENT_SECRET=""
+# export AZURE_FOUNDRY_PROJECT_ENDPOINT=""
+# export AZURE_FOUNDRY_RUNTIME_NAME="foundry"
+# Optional Azure resource coordinates — only enrich the UI's deep-links to Azure:
+# export AZURE_FOUNDRY_SUBSCRIPTION_ID=""
+# export AZURE_FOUNDRY_RESOURCE_GROUP=""
+
+# --- Handoff files written by the install scripts ---
+# 04 → bin/arctl-path.env (ARCTL_BIN) — no static token; use ./arctl.sh (mints fresh per call)
+# Sourcing it here keeps state across shells. The conditional keeps direnv happy
+# before the first install run.
+[ -f "${PWD}/bin/arctl-path.env" ]       && source "${PWD}/bin/arctl-path.env"

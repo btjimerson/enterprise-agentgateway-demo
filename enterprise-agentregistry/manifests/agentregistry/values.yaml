@@ -1,0 +1,11 @@
+# Helm values overlay for the `agentregistry-enterprise` chart at v2026.7.1.
+# 03-install-agentregistry.sh passes this via `--values`.
+#
+# The 2026.7.1 chart is self-contained: it bundles Postgres, ClickHouse, an
+# OTel telemetry collector, and exposes OIDC/RBAC as first-class values. The
+# install script injects all the secret + environment-specific bits via
+# --set (oidc.*, service.type) so they never land on disk — this file carries
+# only stable, non-secret overrides.
+
+# Single registry replica is plenty for a demo.
+replicaCount: 1

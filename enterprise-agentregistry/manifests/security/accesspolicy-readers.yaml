@@ -1,0 +1,21 @@
+# AccessPolicy — grants the 'readers' group read-only catalog access.
+#
+# Without this, the 'readers' group (a non-superuser role) would have NO access
+# at all. spec.principals[].name must equal the OIDC group-claim value.
+# Apply as a superuser (admin).
+apiVersion: ar.dev/v1alpha1
+kind: AccessPolicy
+metadata:
+  name: readers
+spec:
+  description: "readers group — read-only catalog access"
+  principals:
+    - kind: Role
+      name: readers
+  rules:
+    - actions:
+        - registry:read
+      resources:
+        - { kind: agent, name: "*" }
+        - { kind: server, name: "*" }
+        - { kind: runtime, name: "*" }

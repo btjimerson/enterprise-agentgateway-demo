@@ -1,0 +1,28 @@
+# AccessPolicy — grants the 'writers' group read + write across the catalog.
+#
+# RBAC model: the superuser role (oidc.superuserRole=admins) bypasses all policy
+# checks; EVERY other role has NO access until an AccessPolicy grants it.
+# spec.principals[].name must equal the OIDC group-claim value (oidc.roleClaim,
+# default 'Groups') — here, the 'writers' group from the consolidated solo realm.
+# Apply as a superuser (admin). Supported verbs: read, publish, edit, deploy,
+# delete, admin, *. Supported resource kinds: agent, server, runtime.
+apiVersion: ar.dev/v1alpha1
+kind: AccessPolicy
+metadata:
+  name: writers
+spec:
+  description: "writers group — read + write the catalog (everything but admin)"
+  principals:
+    - kind: Role
+      name: writers
+  rules:
+    - actions:
+        - registry:read
+        - registry:publish
+        - registry:edit
+        - registry:deploy
+        - registry:delete
+      resources:
+        - { kind: agent, name: "*" }
+        - { kind: server, name: "*" }
+        - { kind: runtime, name: "*" }

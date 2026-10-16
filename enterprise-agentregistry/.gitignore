@@ -1,0 +1,11 @@
+.envrc
+.envrc.bak
+# Catch sed -i.bak / editor swap files that might carry secrets.
+*.bak
+*.backup
+*.swp
+.direnv/
+# arctl writes a local token/config cache after `arctl user login`.
+.arctl/
+# Local arctl binary if 04-install-arctl.sh drops it here instead of $PATH.
+bin/

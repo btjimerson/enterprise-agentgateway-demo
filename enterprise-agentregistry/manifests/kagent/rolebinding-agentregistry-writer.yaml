@@ -1,0 +1,48 @@
+# RoleBinding that lets the Enterprise Agentregistry backend
+# ServiceAccount create/patch/delete kagent Agent + Team CRs in the
+# `kagent` namespace. Without this, deploying an agent to the kagent
+# Runtime (arctl apply -f deployment.yaml with runtimeRef: kagent)
+# fails with a 403 from the kube-apiserver when the registry server
+# tries to reconcile the kagent Agent CR.
+#
+# Applied by 02-install-kagent.sh AFTER the kagent chart is in place
+# (so the kagent namespace exists and the kagent CRDs are registered
+# — the `role` below can reference them).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentregistry-kagent-writer
+  namespace: kagent
+rules:
+  - apiGroups: ["kagent.dev"]
+    resources:
+      - agents
+      - teams
+      - modelconfigs
+      - mcpservers
+      - toolservers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentregistry-kagent-writer
+  namespace: kagent
+subjects:
+  - kind: ServiceAccount
+    # v2026.7.1 chart fullname is "agentregistry-enterprise" regardless of
+    # release name; the server runs as this SA.
+    name: agentregistry-enterprise
+    # Bound to the agentregistry-system namespace where the chart creates the
+    # SA. If you change AGENTREGISTRY_NAMESPACE in .envrc, update this too.
+    namespace: agentregistry-system
+roleRef:
+  kind: Role
+  name: agentregistry-kagent-writer
+  apiGroup: rbac.authorization.k8s.io

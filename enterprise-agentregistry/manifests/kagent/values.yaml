@@ -1,0 +1,21 @@
+# Helm values overlay for the `kagent-enterprise` chart (KAGENT_ENT_VERSION).
+# 02-install-kagent.sh passes this via `--values`. License key, providers,
+# oidc.issuer/clientId/secret, agents.k8s-agent.enabled, kagent-tools.enabled,
+# and kmcp.licensing.createSecret are injected via --set / --set-string from
+# env vars so the secret bits never land on disk.
+#
+# RBAC role-mapper — tolerate tokens with NO Groups claim. As of agentregistry
+# 2026.7.1 the registry authenticates OUTBOUND to the kagent controller with a
+# client-credentials (machine) token: no user, so no `Groups` claim. The chart's
+# default mapper (`claims.Groups.transformList(...)`, no guard) throws
+# "no such key: Groups" on it → the controller 401s and the kagent runtime sync
+# fails (surfaced confusingly as "kagent auth expired"). Guarding with has() and
+# defaulting a Groups-less (service) token to global.Admin lets the registry's
+# calls through; user tokens still map by their Groups. Mirrors the tolerant
+# mapper 02 sets on the management chart.
+#
+# (Also requires the realm's ar-backend client to carry a kagent-backend audience
+# mapper so the token passes the controller's audience check — ../keycloak.)
+rbac:
+  roleMapping:
+    roleMapper: "has(claims.Groups) ? claims.Groups.transformList(i, v, v in rolesMap, rolesMap[v]) : ['global.Admin']"

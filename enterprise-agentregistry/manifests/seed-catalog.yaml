@@ -1,0 +1,199 @@
+# Synthetic Agent Registry catalog — a believable set of agents + MCP servers so
+# the registry UI and `arctl` demos have realistic data to browse. Registered
+# with `./seed-registry-data.sh` (arctl apply -f), removed with `--cleanup`
+# (arctl delete -f). Nothing is built or pulled: the registry catalogs the
+# declarative spec, and localhost:5001/* image refs are exempt from OCI-label
+# validation, so no images/registries are required. All names are `demo-`
+# prefixed for clean teardown.
+#
+# ── Agents ────────────────────────────────────────────────────────────────
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-billing-copilot, labels: {arctl.dev/framework: adk, arctl.dev/language: python}}
+spec: {description: "Answers customer billing questions and drafts refunds for review.", modelName: gpt-4o, modelProvider: openai, source: {image: localhost:5001/demo-billing-copilot:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-fraud-triage, labels: {arctl.dev/framework: langgraph, arctl.dev/language: python}}
+spec: {description: "Triages suspicious transactions and escalates high-risk cases.", modelName: claude-sonnet-4-5, modelProvider: anthropic, source: {image: localhost:5001/demo-fraud-triage:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-support-router, labels: {arctl.dev/framework: adk, arctl.dev/language: python}}
+spec: {description: "Classifies inbound support tickets and routes them to the right queue.", modelName: gpt-4o-mini, modelProvider: openai, source: {image: localhost:5001/demo-support-router:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-sales-researcher, labels: {arctl.dev/framework: crewai, arctl.dev/language: python}}
+spec: {description: "Researches target accounts and produces a pre-call briefing.", modelName: gemini-2.5-flash, modelProvider: gemini, source: {image: localhost:5001/demo-sales-researcher:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-code-reviewer, labels: {arctl.dev/framework: langgraph, arctl.dev/language: typescript}}
+spec: {description: "Reviews pull requests for correctness, security, and style.", modelName: claude-sonnet-4-5, modelProvider: anthropic, source: {image: localhost:5001/demo-code-reviewer:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-docs-writer, labels: {arctl.dev/framework: adk, arctl.dev/language: python}}
+spec: {description: "Drafts and updates product documentation from source changes.", modelName: gpt-4o, modelProvider: openai, source: {image: localhost:5001/demo-docs-writer:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-incident-commander, labels: {arctl.dev/framework: langgraph, arctl.dev/language: python}}
+spec: {description: "Coordinates incident response, timelines, and status updates.", modelName: claude-sonnet-4-5, modelProvider: anthropic, source: {image: localhost:5001/demo-incident-commander:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-data-analyst, labels: {arctl.dev/framework: adk, arctl.dev/language: python}}
+spec: {description: "Answers analytics questions with SQL and summarizes the results.", modelName: gemini-2.5-flash, modelProvider: gemini, source: {image: localhost:5001/demo-data-analyst:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-onboarding-buddy, labels: {arctl.dev/framework: adk, arctl.dev/language: typescript}}
+spec: {description: "Guides new employees through onboarding tasks and FAQs.", modelName: gpt-4o-mini, modelProvider: openai, source: {image: localhost:5001/demo-onboarding-buddy:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-contract-reviewer, labels: {arctl.dev/framework: langgraph, arctl.dev/language: python}}
+spec: {description: "Flags risky clauses in contracts and suggests redlines.", modelName: claude-haiku-3-5, modelProvider: anthropic, source: {image: localhost:5001/demo-contract-reviewer:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-marketing-copy, labels: {arctl.dev/framework: crewai, arctl.dev/language: python}}
+spec: {description: "Generates campaign copy and variants from a creative brief.", modelName: gpt-4o, modelProvider: openai, source: {image: localhost:5001/demo-marketing-copy:latest}}
+---
+apiVersion: ar.dev/v1alpha1
+kind: Agent
+metadata: {name: demo-devops-assistant, labels: {arctl.dev/framework: adk, arctl.dev/language: go}}
+spec: {description: "Explains Kubernetes state and drafts safe kubectl remediations.", modelName: gemini-2.0-flash, modelProvider: gemini, source: {image: localhost:5001/demo-devops-assistant:latest}}
+---
+# ── MCP servers ─────────────────────────────────────────────────────────────
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-crm, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: python}}
+spec:
+  description: "CRM account lookup and update tools."
+  title: CRM
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-crm:latest, type: oci, oci: {serverName: demo-crm}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-github, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: typescript}}
+spec:
+  description: "GitHub repositories, issues, and pull-request tools."
+  title: GitHub
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-github:latest, type: oci, oci: {serverName: demo-github}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-slack, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: python}}
+spec:
+  description: "Slack messaging, channels, and search tools."
+  title: Slack
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-slack:latest, type: oci, oci: {serverName: demo-slack}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-postgres, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: python}}
+spec:
+  description: "Read-only PostgreSQL query tools."
+  title: Postgres
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-postgres:latest, type: oci, oci: {serverName: demo-postgres}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-jira, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: typescript}}
+spec:
+  description: "Jira issues, sprints, and board tools."
+  title: Jira
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-jira:latest, type: oci, oci: {serverName: demo-jira}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-filesystem, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: go}}
+spec:
+  description: "Sandboxed filesystem read/write tools."
+  title: Filesystem
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-filesystem:latest, type: oci, oci: {serverName: demo-filesystem}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-weather, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: python}}
+spec:
+  description: "Weather forecasts and current conditions."
+  title: Weather
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-weather:latest, type: oci, oci: {serverName: demo-weather}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-stripe, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: python}}
+spec:
+  description: "Stripe payments, customers, and refund tools."
+  title: Stripe
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-stripe:latest, type: oci, oci: {serverName: demo-stripe}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-elasticsearch, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: python}}
+spec:
+  description: "Elasticsearch search and indexing tools."
+  title: Elasticsearch
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-elasticsearch:latest, type: oci, oci: {serverName: demo-elasticsearch}}
+      transport: {type: http, path: /mcp, port: 3000}
+---
+apiVersion: ar.dev/v1alpha1
+kind: MCPServer
+metadata: {name: demo-pagerduty, labels: {arctl.dev/framework: fastmcp, arctl.dev/language: typescript}}
+spec:
+  description: "PagerDuty incidents and on-call schedule tools."
+  title: PagerDuty
+  source:
+    package:
+      command: python3
+      launch: {args: [{type: positional, value: src/main.py}]}
+      origin: {identifier: localhost:5001/demo-pagerduty:latest, type: oci, oci: {serverName: demo-pagerduty}}
+      transport: {type: http, path: /mcp, port: 3000}

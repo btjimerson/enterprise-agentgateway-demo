@@ -1,0 +1,14 @@
+# Helm values overlay for the `management` chart (KAGENT_ENT_VERSION).
+# 02-install-kagent.sh passes this via `--values`. License key, OIDC issuer,
+# client IDs/secret, and product enablement are injected via --set from env
+# vars so the secret bits never land on disk.
+#
+# the external Keycloak ('solo' realm) emits the role claim as `Groups`
+# (capital G), which is the chart's default. 02-install-kagent.sh also passes a
+# tolerant roleMapper via an inline -f values file (defaults authenticated users
+# with no Groups claim to Admin) so SSO works out of the box.
+#
+# This file is intentionally empty of overrides — kept so the install script's
+# `--values` reference stays stable and there's an obvious place to add
+# non-secret management-chart tweaks later.
+{}
