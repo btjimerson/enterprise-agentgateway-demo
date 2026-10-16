@@ -1,0 +1,27 @@
+# Fine-grained management RBAC (UI_RBAC_MODE=fine-grained): route visibility.
+#
+# In this mode the Routes page is empty for everyone until a grant exists: the
+# backend's namespace filter resolves to no namespaces and every HTTPRoute is
+# dropped before the query runs. `httproutes` is one of only three
+# resources this release's catalog accepts (the others are `budgets` and
+# `virtual-keys`; the controller rejects any other name with UnknownResource), so
+# Gateways, Destinations and Policies need nothing. Do not use `agentgateway:*`:
+# it would also grant virtual-key visibility, which this mode exists to withhold.
+#
+# View goes to all three groups the UI role mapper knows about. No namespace
+# constraint: routes live in agentgateway-system and monitoring.
+# Grants from all policies are additive. Takes effect in seconds, no restart.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayRBACPolicy
+metadata:
+  name: httproutes-viewers
+  namespace: agentgateway-system
+spec:
+  principals:
+    - all:
+        - attribute: groups
+          values: ["admins", "writers", "readers"]
+  grants:
+    - name: view-httproutes
+      accessLevel: view
+      resource: agentgateway:httproutes

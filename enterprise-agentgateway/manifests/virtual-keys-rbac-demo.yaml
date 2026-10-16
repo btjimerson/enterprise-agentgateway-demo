@@ -1,0 +1,37 @@
+# Pillar 5 · Case 7 fixtures: one virtual key per demo user, so the UI has
+# something to filter by identity.
+#
+# Each entry's metadata.user is what fine-grained RBAC matches against the
+# signed-in user's username: alice (admins), bob (writers), reader-user (readers)
+# are the realm users in ../../keycloak/realm-demo.json. The values are
+# SHA-256 hashes of throwaway strings (sk-demo-<user>), not real credentials.
+#
+# The Secret is selected by the policy below, which is what makes the UI list it.
+# Permissive mode so the other demos' keyless traffic on this Gateway is
+# unaffected.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vk-rbac-demo
+  namespace: agentgateway-system
+type: Opaque
+stringData:
+  alice-key: '{"keyHash":"sha256:32a642c5fd761670c7f9989b70138c93c56ea519529eb544d46b91a8e59f3075","metadata":{"id":"alice-key","user":"alice","group":"admins"}}'
+  bob-key: '{"keyHash":"sha256:ca5de30b0acbd9ce4fd5d1721830a77e6b4b8cbd3123e335f0bb46786758ff35","metadata":{"id":"bob-key","user":"bob","group":"writers"}}'
+  reader-key: '{"keyHash":"sha256:685afadb656a2e69a692d566ec57ebd5a8b7c8a91d3ea8f4232560af242c511a","metadata":{"id":"reader-key","user":"reader-user","group":"readers"}}'
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: vk-rbac-demo
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    apiKeyAuthentication:
+      mode: Permissive
+      secretRef:
+        name: vk-rbac-demo

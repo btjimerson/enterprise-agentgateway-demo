@@ -1,0 +1,323 @@
+{
+  "realm": "solo",
+  "enabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 14400,
+  "ssoSessionIdleTimeout": 14400,
+  "ssoSessionMaxLifespan": 14400,
+  "groups": [
+    {
+      "name": "admins"
+    },
+    {
+      "name": "writers"
+    },
+    {
+      "name": "readers"
+    },
+    {
+      "name": "admin"
+    },
+    {
+      "name": "users"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "solo-ui-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost:4000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "Groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "solo-ui-backend",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": true,
+      "redirectUris": [
+        "http://localhost:4000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4000"
+      ],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "Groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "${SOLO_UI_BACKEND_SECRET}"
+    },
+    {
+      "clientId": "agw-client",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost/*",
+        "http://localhost:*/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "protocolMappers": [
+        {
+          "name": "may_act",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "may_act",
+            "claim.value": "{\"sub\":\"system:serviceaccount:agentgateway-demo:agent-sa\"}",
+            "jsonType.label": "JSON",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "ar-backend",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${AR_BACKEND_SECRET}",
+      "protocolMappers": [
+        {
+          "name": "kagent-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "kagent-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "kagent-backend",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KAGENT_BACKEND_SECRET}"
+    },
+    {
+      "clientId": "ar-cli-interactive",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "Groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "ar-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ar-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "ar-cli-password",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "Groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "ar-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ar-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Example",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "${DEMO_USER_ALICE_PASSWORD}"
+        }
+      ],
+      "attributes": {
+        "mcp_scope": [
+          "restricted"
+        ]
+      },
+      "groups": [
+        "admins",
+        "admin",
+        "users"
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Example",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "${DEMO_USER_BOB_PASSWORD}"
+        }
+      ],
+      "attributes": {
+        "mcp_scope": [
+          "all"
+        ]
+      },
+      "groups": [
+        "writers",
+        "users"
+      ]
+    },
+    {
+      "username": "reader-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "reader-user@example.com",
+      "firstName": "Riley",
+      "lastName": "Reader",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "${DEMO_USER_READER_PASSWORD}"
+        }
+      ],
+      "groups": [
+        "readers"
+      ]
+    },
+    {
+      "username": "admin-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin-user@example.com",
+      "firstName": "Ada",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "admins"
+      ]
+    },
+    {
+      "username": "writer-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "writer-user@example.com",
+      "firstName": "Wendy",
+      "lastName": "Writer",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_WRITER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "writers"
+      ]
+    }
+  ]
+}

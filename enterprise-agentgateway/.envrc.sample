@@ -1,0 +1,110 @@
+# Sample environment for the Solo Enterprise for Agentgateway demo.
+# Copy to .envrc, fill in the secrets, then run: direnv allow
+
+# --- License / provider keys (required) ---
+export AGENTGATEWAY_LICENSE_KEY="<paste>"
+export OPENAI_API_KEY="<paste>"
+# Anthropic key — only needed for the Claude Code passthrough demo
+# (demo/p02-routing-11-...) when run with AUTH_MODE=apikey. The demo creates a
+# Secret from this so the gateway injects it upstream; clients never send it.
+# NOT needed for the default AUTH_MODE=oauth (Claude subscription via SSO) — there Claude Code's OAuth token is passed through and no key is used.
+export ANTHROPIC_API_KEY="<paste>"
+
+# --- Cluster / namespace configuration ---
+# CLUSTER_CONTEXT defaults to `kubectl config current-context` at script
+# runtime — leave it unset to track context switches you make in the
+# same shell. Only export a specific value if you want to pin every
+# script to one context regardless of `kubectl config use-context`.
+# export CLUSTER_CONTEXT="my-specific-context"
+export AGENTGATEWAY_NAMESPACE="agentgateway-system"
+export ESO_NAMESPACE="external-secrets"
+export OBSERVABILITY_NAMESPACE="monitoring"
+export DEMO_APPS_NAMESPACE="agentgateway-demo"
+
+# --- Agentgateway ---
+export AGENTGATEWAY_VERSION="v2026.10.0"
+# Standard channel. The 2026.10.0 matrix supports Gateway API Standard 1.4-1.6,
+# so 1.5.1 is in range. DELIBERATELY NOT 1.6.x, even though the matrix allows it:
+# 1.6 promoted TCPRoute/UDPRoute to the standard channel shipping v1alpha2
+# UNSERVED, which Istio's istiod still watches, leaving it stuck 0/1 hot-looping.
+# Irrelevant if you do not run Istio, but keep this pin if you ever add it.
+export GATEWAY_API_VERSION="v1.5.1"
+export AGENTGATEWAY_CONTROLLER_REPLICAS="2"
+
+# --- Solo Enterprise UI (management chart) ---
+# Ref: https://docs.solo.io/agentgateway/2.3.x/install/ui/setup/
+# 0.5.10 is AHEAD of the compatibility matrix for agentgateway 2026.10.0
+# (https://docs.solo.io/agentgateway/latest/reference/versions/ names an older
+# Solo UI). It is pinned on purpose: fine-grained management RBAC, which is this
+# demo's baseline (UI_RBAC_MODE below), first ships in this release.
+# Do not move it back without also dropping UI_RBAC_MODE.
+export UI_MANAGEMENT_VERSION="0.5.10"
+# Management RBAC mode for the Solo UI. fine-grained: every signed-in user sees
+# and manages only their own virtual keys; admins need the explicit grant that
+# 02-install-ui.sh applies (manifests/rbac-virtual-keys-admins.yaml). It also
+# covers budgets, budget entries and HTTPRoutes (grants in
+# manifests/rbac-budgets-admins.yaml and rbac-httproutes-viewers.yaml). Set to
+# "coarse" for the previous role-only behavior.
+export UI_RBAC_MODE="fine-grained"
+export UI_CLUSTER_NAME="mgmt-cluster"
+
+# --- Keycloak (external IdP — you provide it) ---
+# The demo expects an EXTERNAL Keycloak 26 reachable over HTTPS from both your
+# browser and the cluster; there is no in-cluster Keycloak. Import
+# ../keycloak/realm-demo.json into it (see README "Keycloak") and set
+# KEYCLOAK_EXTERNAL_URL to its public URL.
+export KEYCLOAK_EXTERNAL_URL="https://keycloak.example.com"
+export KEYCLOAK_EXTERNAL_HOST="${KEYCLOAK_EXTERNAL_URL#https://}"   # bare host (JWKS ExternalName Service)
+export KEYCLOAK_REALM="solo"
+export KEYCLOAK_CLIENT_ID="agw-client"   # public client: /chat JWT + OBO demos
+export KEYCLOAK_ISSUER="${KEYCLOAK_EXTERNAL_URL}/realms/${KEYCLOAK_REALM}"
+export KEYCLOAK_JWKS_URL="${KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
+# Shared Solo Enterprise UI OIDC clients (in the 'solo' realm):
+export SOLO_UI_FRONTEND_CLIENT="solo-ui-frontend"
+export SOLO_UI_BACKEND_CLIENT="solo-ui-backend"
+# Choose your own value. It is substituted into the realm import AND handed to
+# the UI backend, so the two must match.  e.g.  openssl rand -hex 24
+export SOLO_UI_BACKEND_SECRET="<generate>"
+# Browser-facing UI URL (the SPA builds API calls + the OIDC redirect from it).
+# The UI is reached over a localhost port-forward (./ui-login.sh).
+export SOLO_UI_URL="http://localhost:4000"
+
+# --- External Secrets Operator ---
+# HELD at 0.10.5. Bumping this is NOT a pin change — tested on a live cluster
+# 2026-09-18 and it fails in two ways:
+#   1. ESO stopped serving external-secrets.io/v1beta1 by 0.19.x. Our
+#      ClusterSecretStore and ExternalSecret use v1beta1, so they must migrate
+#      to v1 first. The v1 schema IS compatible (provider.fake.data[] and
+#      remoteRef.key are unchanged), so that part is mechanical.
+#   2. The real blocker: 0.10.5's CRDs carry spec.conversion.strategy=Webhook,
+#      2.x ships no conversion stanza, and helm's server-side apply MERGES —
+#      leaving webhookClientConfig set with no strategy, which the API server
+#      rejects. The upgrade needs the conversion stanza removed from the
+#      clustersecretstores/externalsecrets/secretstores CRDs first, which is a
+#      cluster-scoped operation outside the chart.
+# Rolling back is also not clean: a partial upgrade adds v1 to a CRD's
+# status.storedVersions, and 0.10.5's CRD spec has no v1, so the API server
+# refuses the downgrade. Do this deliberately, not as part of a version sweep.
+export ESO_VERSION="0.10.5"
+
+# --- Demo users (created by the realm import; choose your own passwords) ---
+export DEMO_USER_ALICE="alice"
+export DEMO_USER_ALICE_PASSWORD="<choose>"
+export DEMO_USER_BOB="bob"
+export DEMO_USER_BOB_PASSWORD="<choose>"
+export DEMO_USER_READER="reader-user"
+export DEMO_USER_READER_PASSWORD="<choose>"   # only used by demo/p05-security-07-virtual-key-rbac.sh
+
+# --- GitHub MCP elicitation (demo/security-05-elicitation-github.sh) ---
+# Register a GitHub App at
+#   https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
+# Set the App's Redirect URL to ${REDIRECT_URI} below. Then paste the
+# client_id + client_secret from the App's settings page here. Leave
+# unset to skip the GitHub elicitation demo. (Atlassian needs no pre-registered app:
+# ./10-install-elicitation.sh --with-atlassian registers its own client.)
+# export GITHUB_CLIENT_ID="<paste>"
+# export GITHUB_CLIENT_SECRET="<paste>"
+# REDIRECT_URI is the UI elicitations page / OAuth callback. The UI is reached
+# over a localhost port-forward (./ui-login.sh), so it defaults to localhost.
+# Set the GitHub App's Authorization callback URL to this value.
+export REDIRECT_URI="http://localhost:4000/age/elicitations"

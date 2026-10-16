@@ -1,0 +1,43 @@
+# Elicitation for the Atlassian MCP backend, using the typed fields.
+#
+# Two fields work together and BOTH are required:
+#   - backend.entElicitation.interactive.oauth: where the user authorizes
+#     (Atlassian's MCP OAuth server) and which client does it.
+#   - backend.entTokenExchange.solo.elicitation: makes the proxy look up the
+#     user's stored token in the STS AND inject it into the upstream request.
+#
+# Do not pair entElicitation with the older backend.tokenExchange.mode. That
+# combination still fetches the stored token from the STS on every message but
+# sends the caller's own IdP JWT upstream. Atlassian then answers tool calls with
+# a generic "We are having trouble completing this action".
+#
+# Templated by 10-install-elicitation.sh (envsubst allow-list there):
+#   ATLASSIAN_CLIENT_ID   from Atlassian's dynamic client registration
+#   ATLASSIAN_AUTHORIZE_URL / ATLASSIAN_TOKEN_URL   from Atlassian's discovery document
+#   REDIRECT_URI          the UI elicitations page; must equal the redirect URI the
+#                         client was registered with and the controller's CALLBACK_URL
+# The client secret lives in the atlassian-mcp-oauth Secret (key client_secret).
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: atlassian-elicitation
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: enterpriseagentgateway.solo.io
+      kind: EnterpriseAgentgatewayBackend
+      name: atlassian-mcp
+  backend:
+    entElicitation:
+      interactive:
+        oauth:
+          clientId: ${ATLASSIAN_CLIENT_ID}
+          clientSecretRef:
+            name: atlassian-mcp-oauth
+            key: client_secret
+          authorizeUrl: ${ATLASSIAN_AUTHORIZE_URL}
+          accessTokenUrl: ${ATLASSIAN_TOKEN_URL}
+          redirectUri: ${REDIRECT_URI}
+    entTokenExchange:
+      solo:
+        elicitation: {}

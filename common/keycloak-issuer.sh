@@ -91,7 +91,7 @@ solo_verify_keycloak_issuer() {
       # have passed an explicit issuer that disagrees with the environment.
       local realm="${issuer##*/realms/}"
       [ "${realm}" = "${issuer}" ] && realm="<none in URL>"
-      echo -e "${_SKI_RED}       The host is up but has no '${realm%/}' realm — import keycloak/realm-agentgateway-demo.json (see README).${_SKI_NC}" >&2
+      echo -e "${_SKI_RED}       The host is up but has no '${realm%/}' realm — import keycloak/realm-demo.json (see README).${_SKI_NC}" >&2
     fi
     rm -f "${body_f}"
     return 1

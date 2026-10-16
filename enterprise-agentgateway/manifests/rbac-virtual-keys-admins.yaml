@@ -1,0 +1,29 @@
+# Fine-grained management RBAC (UI_RBAC_MODE=fine-grained): admins' virtual-key
+# access.
+#
+# By default every signed-in user can view and manage only the virtual keys whose
+# `user` metadata is theirs. That default applies to admins too: global.Admin does
+# NOT imply access to virtual keys in this mode. This grant gives the `admins`
+# group manage (which implies view) on every key set in the namespace, so an
+# admin can see everyone's keys and issue keys for other users.
+#
+# `groups` is the verified Groups claim from the Keycloak realm (rbac.subjectMapping).
+# Grants from all policies are additive. Takes effect in seconds, no restart.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayRBACPolicy
+metadata:
+  name: virtual-keys-admins
+  namespace: agentgateway-system
+spec:
+  principals:
+    - all:
+        - attribute: groups
+          values: ["admins"]
+  grants:
+    - name: manage-virtual-keys
+      accessLevel: manage
+      resource: agentgateway:virtual-keys
+      constraints:
+        - all:
+            - attribute: namespace
+              values: ["agentgateway-system"]

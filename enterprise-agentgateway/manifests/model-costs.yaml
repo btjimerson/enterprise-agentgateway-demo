@@ -1,0 +1,53 @@
+# Model cost catalog for the data-plane proxy, plus the Gateway-level parameters
+# object that wires it in. Applied by 01-install-agentgateway.sh BEFORE the
+# Gateway, which references agw-params through infrastructure.parametersRef.
+#
+# Why it exists: the Solo UI's Model Cost Catalog tab lists prices from the
+# ConfigMap(s) declared in modelCatalog.sources. The proxy ships a built-in
+# catalog that prices common public models, but the UI cannot read that one from
+# Kubernetes, so without a source declared here the tab says "No model cost
+# catalog to list". The cost DASHBOARD does not read this: it sums the
+# cost already stamped on each span (seed-cost-data.sh writes it directly).
+#
+# This is an OVERLAY (no metadata.generatedAt), so it is applied on top of the
+# built-in catalog rather than replacing it. Rates are USD per 1M tokens, as
+# strings. They match the rates seed-cost-data.sh uses for the same models, so
+# the catalog tab and the seeded dashboard agree. Unknown fields are rejected.
+#
+# agw-params is shared: 10-install-elicitation.sh adds spec.env (the STS wiring)
+# to it with a merge patch. Do not move that to `kubectl apply`, which would
+# prune modelCatalog.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-costs
+  namespace: agentgateway-system
+data:
+  catalog.json: |
+    {
+      "providers": {
+        "openai": {"models": {
+          "gpt-4o":      {"rates": {"input": "5.00", "output": "15.00"}},
+          "gpt-4o-mini": {"rates": {"input": "0.15", "output": "0.60"}}
+        }},
+        "anthropic": {"models": {
+          "claude-sonnet-4-5": {"rates": {"input": "3.00", "output": "15.00"}},
+          "claude-haiku-3-5":  {"rates": {"input": "0.80", "output": "4.00"}}
+        }},
+        "gcp.gemini": {"models": {
+          "gemini-2.0-flash": {"rates": {"input": "0.10", "output": "0.40"}}
+        }}
+      }
+    }
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayParameters
+metadata:
+  name: agw-params
+  namespace: agentgateway-system
+spec:
+  modelCatalog:
+    sources:
+      - configMap:
+          name: model-costs
+          key: catalog.json

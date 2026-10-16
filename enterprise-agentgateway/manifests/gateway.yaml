@@ -1,0 +1,25 @@
+# Data-plane proxy for the Enterprise Agentgateway control plane.
+# The control plane (in the same namespace) translates this Gateway plus its
+# attached HTTPRoutes / AgentgatewayBackends / EnterpriseAgentgatewayPolicies
+# into xDS and pushes config to the proxy pods that the GatewayClass creates.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agentgateway-proxy
+  namespace: agentgateway-system
+spec:
+  gatewayClassName: enterprise-agentgateway
+  # agw-params (manifests/model-costs.yaml) carries the model cost catalog; the
+  # elicitation step adds the STS env to the same object.
+  infrastructure:
+    parametersRef:
+      group: enterpriseagentgateway.solo.io
+      kind: EnterpriseAgentgatewayParameters
+      name: agw-params
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+      allowedRoutes:
+        namespaces:
+          from: All

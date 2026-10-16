@@ -1,0 +1,27 @@
+# Atlassian's hosted remote MCP server, reached over HTTPS.
+#
+# Used by 10-install-elicitation.sh --with-atlassian. It must be an
+# EnterpriseAgentgatewayBackend (not AgentgatewayBackend): the typed
+# entElicitation / entTokenExchange fields on the policy target this kind.
+#
+# Atlassian's server is stateful (it returns an Mcp-Session-Id), so the backend
+# uses Stateful session routing, which is what this was verified with.
+#
+# The target path is set here, so the HTTPRoute must NOT also rewrite the path.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayBackend
+metadata:
+  name: atlassian-mcp
+  namespace: agentgateway-system
+spec:
+  mcp:
+    sessionRouting: Stateful
+    targets:
+      - name: atlassian
+        static:
+          host: mcp.atlassian.com
+          port: 443
+          path: /v1/mcp
+          protocol: StreamableHTTP
+  policies:
+    tls: {}

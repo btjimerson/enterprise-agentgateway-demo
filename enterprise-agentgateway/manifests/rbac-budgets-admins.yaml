@@ -1,0 +1,32 @@
+# Fine-grained management RBAC (UI_RBAC_MODE=fine-grained): admins' budget
+# access.
+#
+# In this mode the UI's budgets resource needs an explicit grant, exactly like
+# virtual keys and routes. Without one the Budgets page is read-only: the Create
+# Budget button is disabled even though the cost-management-writes feature is on.
+# global.Admin does NOT imply budget access here. This grant gives the `admins`
+# group manage (which implies view) on budgets and budget entries in the
+# namespace.
+#
+# `budgets` is one of only three resources this release's catalog accepts (the
+# others are `virtual-keys` and `httproutes`). Do not use `agentgateway:*`: it
+# would also grant virtual-key visibility, which this mode exists to withhold.
+# Grants from all policies are additive. Takes effect in seconds, no restart.
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayRBACPolicy
+metadata:
+  name: budgets-admins
+  namespace: agentgateway-system
+spec:
+  principals:
+    - all:
+        - attribute: groups
+          values: ["admins"]
+  grants:
+    - name: manage-budgets
+      accessLevel: manage
+      resource: agentgateway:budgets
+      constraints:
+        - all:
+            - attribute: namespace
+              values: ["agentgateway-system"]
